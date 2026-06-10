@@ -1,0 +1,12 @@
+# OneDrive temporary files
+*.tmp
+~$*
+desktop.ini
+Thumbs.db
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+*.swp

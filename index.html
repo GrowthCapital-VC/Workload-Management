@@ -1,0 +1,1977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Growth Capital — Workload</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --gc-blue: #003EFF;
+  --gc-blue-light: #6288FF;
+  --gc-blue-dark: #00269D;
+  --gc-blue-darker: #000E3B;
+  --gc-lime: #C4F222;
+  --gc-lime-dark: #9EC31B;
+  --gc-orange: #FF6400;
+  --gc-red: #E74C3C;
+  --gc-amber: #F39C12;
+  --gc-green: #27AE60;
+  --gc-black: #000000;
+  --gc-white: #FFFFFF;
+  --gc-offwhite: #F5F7FF;
+  --gc-gray-95: #F2F2F2;
+  --gc-gray-90: #E5E5E5;
+  --gc-gray-80: #CCCCCC;
+  --gc-gray-60: #999999;
+  --gc-gray-40: #666666;
+  --gc-gray-20: #333333;
+  --gc-gray-10: #191919;
+  --gc-gradient: linear-gradient(135deg, #000E3B 0%, #00269D 50%, #003EFF 100%);
+  --radius: 8px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  --transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Montserrat',sans-serif; background:var(--gc-offwhite); color:var(--gc-gray-20); font-size:14px; line-height:1.5; min-height:100vh; }
+
+/* === Auth screen === */
+.auth-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--gc-gradient); padding:24px; }
+.auth-card { width:100%; max-width:420px; background:white; border-radius:16px; padding:40px 36px; box-shadow:var(--shadow-lg); }
+.auth-logo { text-align:center; margin-bottom:8px; }
+.auth-logo .wm { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:24px; color:var(--gc-blue-darker); letter-spacing:-0.8px; }
+.auth-logo .sep { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:11px; color:var(--gc-gray-60); letter-spacing:2px; text-transform:uppercase; margin-top:4px; }
+.auth-title { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:20px; color:var(--gc-gray-10); text-align:center; margin-top:24px; margin-bottom:4px; }
+.auth-sub { text-align:center; font-size:12px; color:var(--gc-gray-60); margin-bottom:24px; }
+.auth-form .gc-form-group { margin-bottom:16px; }
+.auth-toggle { text-align:center; margin-top:16px; font-size:12px; color:var(--gc-gray-60); }
+.auth-toggle a { color:var(--gc-blue); font-weight:600; cursor:pointer; text-decoration:none; }
+.auth-error { background:#FDECEA; color:#9C2616; border-left:3px solid var(--gc-red); padding:10px 12px; border-radius:6px; font-size:12px; margin-bottom:12px; display:none; }
+.auth-info { background:#EAF4FE; color:#1F4E8C; border-left:3px solid var(--gc-blue); padding:10px 12px; border-radius:6px; font-size:12px; margin-bottom:12px; display:none; }
+
+/* === Header / Tabs === */
+.gc-header { background:var(--gc-gradient); position:sticky; top:0; z-index:100; box-shadow:0 4px 24px rgba(0,14,59,0.3); }
+.gc-header-inner { max-width:1400px; margin:0 auto; padding:14px 32px; display:flex; align-items:center; justify-content:space-between; }
+.gc-logo { display:flex; align-items:center; gap:16px; }
+.gc-logo-wordmark { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:22px; color:white; letter-spacing:-0.8px; text-decoration:none; }
+.gc-logo-sep { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px; color:rgba(255,255,255,0.5); letter-spacing:2px; text-transform:uppercase; border-left:1px solid rgba(255,255,255,0.2); padding-left:16px; }
+.gc-header-actions { display:flex; gap:8px; align-items:center; }
+.gc-user-chip { display:flex; align-items:center; gap:10px; padding:6px 14px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:8px; }
+.gc-user-name { color:white; font-weight:600; font-size:12px; }
+.gc-user-role { font-family:'Space Grotesk',sans-serif; font-size:10px; color:var(--gc-lime); text-transform:uppercase; letter-spacing:1.5px; font-weight:700; }
+
+.gc-btn { font-family:'Montserrat',sans-serif; font-weight:600; font-size:12px; padding:8px 16px; border-radius:6px; border:none; cursor:pointer; transition:var(--transition); display:inline-flex; align-items:center; gap:6px; text-transform:uppercase; letter-spacing:0.5px; }
+.gc-btn-primary { background:var(--gc-lime); color:var(--gc-black); }
+.gc-btn-primary:hover { background:#d4ff33; transform:translateY(-1px); }
+.gc-btn-primary:disabled { background:var(--gc-gray-80); color:var(--gc-gray-40); cursor:not-allowed; transform:none; }
+.gc-btn-secondary { background:rgba(255,255,255,0.1); color:var(--gc-white); border:1px solid rgba(255,255,255,0.2); }
+.gc-btn-secondary:hover { background:rgba(255,255,255,0.2); }
+.gc-btn-ghost { background:transparent; color:var(--gc-blue); border:1px solid var(--gc-blue); }
+.gc-btn-ghost:hover { background:var(--gc-blue); color:white; }
+.gc-btn-sm { padding:5px 10px; font-size:11px; }
+.gc-btn-danger { background:var(--gc-red); color:white; }
+.gc-btn-danger:hover { background:#c0392b; }
+.gc-btn-block { width:100%; justify-content:center; }
+
+.gc-tabs { background:white; border-bottom:1px solid var(--gc-gray-90); position:sticky; top:60px; z-index:99; }
+.gc-tabs-inner { max-width:1400px; margin:0 auto; padding:0 32px; display:flex; flex-wrap:wrap; }
+.gc-tab { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:13px; padding:14px 22px; border:none; background:transparent; color:var(--gc-gray-40); cursor:pointer; border-bottom:3px solid transparent; transition:var(--transition); letter-spacing:0.3px; }
+.gc-tab:hover { color:var(--gc-blue); }
+.gc-tab.active { color:var(--gc-blue); border-bottom-color:var(--gc-blue); }
+
+.gc-main { max-width:1400px; margin:0 auto; padding:24px 32px 60px; }
+.gc-section { display:none; }
+.gc-section.active { display:block; }
+
+.gc-card { background:white; border-radius:var(--radius); box-shadow:var(--shadow-sm); border:1px solid var(--gc-gray-90); margin-bottom:20px; overflow:hidden; }
+.gc-card-header { padding:16px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--gc-gray-90); background:var(--gc-offwhite); flex-wrap:wrap; gap:10px; }
+.gc-card-title { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:15px; color:var(--gc-gray-10); }
+.gc-card-sub { font-size:11px; color:var(--gc-gray-60); margin-top:2px; }
+.gc-card-body { padding:20px; }
+
+.gc-controls-panel { background:var(--gc-gradient); border-radius:12px; padding:28px; margin-bottom:24px; box-shadow:0 8px 32px rgba(0,14,59,0.25); color:white; }
+.gc-cp-title { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:18px; color:white; margin-bottom:4px; }
+.gc-cp-sub { font-size:12px; color:rgba(255,255,255,0.55); margin-bottom:20px; }
+.gc-controls-panel label { display:block; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:1px; color:rgba(255,255,255,0.55); margin-bottom:5px; }
+.gc-controls-panel .gc-input, .gc-controls-panel .gc-select { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:white; font-weight:600; }
+.gc-controls-panel .gc-input:focus, .gc-controls-panel .gc-select:focus { border-color:var(--gc-lime); box-shadow:0 0 0 3px rgba(196,242,34,0.15); }
+.gc-controls-panel .gc-select option { background:var(--gc-blue-darker); color:white; }
+.gc-cp-divider { border:none; border-top:1px solid rgba(255,255,255,0.1); margin:20px 0; }
+.gc-cp-section-label { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:12px; color:var(--gc-lime); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:12px; margin-top:4px; }
+.gc-cp-stats { display:flex; gap:32px; flex-wrap:wrap; }
+.gc-cp-stat-label { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:rgba(255,255,255,0.5); margin-bottom:2px; }
+.gc-cp-stat-value { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:22px; }
+.gc-cp-stat-value.lime { color:var(--gc-lime); }
+.gc-cp-stat-value.wh { color:white; }
+.gc-cp-stat-value.amber { color:#FFD166; }
+.gc-cp-stat-value.red { color:#FF8A80; }
+
+.gc-grid { display:grid; gap:20px; }
+.gc-grid-2 { grid-template-columns:1fr 1fr; }
+.gc-grid-3 { grid-template-columns:1fr 1fr 1fr; }
+.gc-grid-4 { grid-template-columns:1fr 1fr 1fr 1fr; }
+.gc-grid-5 { grid-template-columns:repeat(5,1fr); }
+
+.gc-stat { background:white; border-radius:var(--radius); padding:20px; border:1px solid var(--gc-gray-90); box-shadow:var(--shadow-sm); }
+.gc-stat-label { font-size:11px; font-weight:600; color:var(--gc-gray-60); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+.gc-stat-value { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:24px; color:var(--gc-gray-10); }
+.gc-stat-value.blue { color:var(--gc-blue); }
+.gc-stat-value.lime { color:var(--gc-lime-dark); }
+.gc-stat-value.amber { color:var(--gc-amber); }
+.gc-stat-value.red { color:var(--gc-red); }
+.gc-stat-value.green { color:var(--gc-green); }
+.gc-stat-sub { font-size:11px; color:var(--gc-gray-60); margin-top:4px; }
+
+.gc-table-wrap { overflow-x:auto; }
+table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
+.gc-table thead th { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--gc-gray-40); padding:10px 12px; text-align:left; border-bottom:2px solid var(--gc-gray-90); white-space:nowrap; background:var(--gc-offwhite); }
+.gc-table thead th.r { text-align:right; }
+.gc-table thead th.c { text-align:center; }
+.gc-table tbody td { padding:10px 12px; border-bottom:1px solid var(--gc-gray-95); font-variant-numeric:tabular-nums; vertical-align:middle; }
+.gc-table tbody td.r { text-align:right; }
+.gc-table tbody td.c { text-align:center; }
+.gc-table tbody td.m { font-family:'Space Grotesk',sans-serif; font-weight:500; }
+.gc-table tbody tr:hover { background:var(--gc-offwhite); }
+.gc-table tbody tr.total-row { font-weight:700; background:var(--gc-offwhite); border-top:2px solid var(--gc-gray-80); }
+.gc-table tbody tr.total-row td { padding:12px; }
+.gc-table tbody tr.muted td { color:var(--gc-gray-60); }
+.gc-table tbody tr.locked td { background:#fafafa; }
+.gc-empty { padding:32px 16px; text-align:center; color:var(--gc-gray-60); font-size:13px; }
+
+/* Drag and drop for project rows */
+.gc-table tbody tr[draggable="true"] { cursor:grab; }
+.gc-table tbody tr[draggable="true"]:active { cursor:grabbing; }
+.gc-table tbody tr.drag-over { border-top:3px solid var(--gc-blue) !important; }
+.gc-table tbody tr.dragging { opacity:0.35; }
+.drag-handle { color:var(--gc-gray-60); cursor:grab; user-select:none; font-size:14px; padding:0 4px; }
+.drag-handle:hover { color:var(--gc-blue); }
+
+.gc-form-group { margin-bottom:14px; }
+.gc-form-group label { display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.8px; color:var(--gc-gray-40); margin-bottom:5px; }
+.gc-input, .gc-select { width:100%; padding:9px 12px; border:1px solid var(--gc-gray-80); border-radius:6px; font-family:'Montserrat',sans-serif; font-size:13px; transition:var(--transition); background:white; color:var(--gc-gray-10); }
+.gc-input:focus, .gc-select:focus { outline:none; border-color:var(--gc-blue); box-shadow:0 0 0 3px rgba(0,62,255,0.1); }
+.gc-input.small { padding:6px 10px; font-size:12px; }
+.gc-input.r { text-align:right; font-variant-numeric:tabular-nums; }
+.gc-input:disabled { background:var(--gc-gray-95); color:var(--gc-gray-60); cursor:not-allowed; }
+
+.gc-badge { display:inline-block; padding:3px 9px; border-radius:4px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
+.gc-badge-blue { background:#DDE5FF; color:var(--gc-blue-dark); }
+.gc-badge-green { background:#D6F4E2; color:#1B6B3F; }
+.gc-badge-amber { background:#FFF1D6; color:#8B5E00; }
+.gc-badge-red { background:#FBD5D0; color:#9C2616; }
+.gc-badge-gray { background:var(--gc-gray-90); color:var(--gc-gray-20); }
+.gc-badge-lime { background:#EDFBBD; color:#3E4C0A; }
+
+.gc-chart-container { position:relative; height:320px; padding:10px; }
+
+.gc-modal-overlay { display:none; position:fixed; top:0;left:0;right:0;bottom:0; background:rgba(0,14,59,0.5); z-index:200; align-items:center; justify-content:center; backdrop-filter:blur(4px); }
+.gc-modal-overlay.open { display:flex; }
+.gc-modal { background:white; border-radius:12px; width:560px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-lg); }
+.gc-modal-header { padding:20px 24px 16px; border-bottom:1px solid var(--gc-gray-90); display:flex; justify-content:space-between; align-items:center; }
+.gc-modal-title { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:18px; }
+.gc-modal-close { background:none; border:none; font-size:22px; cursor:pointer; color:var(--gc-gray-40); padding:4px; line-height:1; }
+.gc-modal-body { padding:24px; }
+.gc-modal-footer { padding:16px 24px; border-top:1px solid var(--gc-gray-90); display:flex; gap:8px; justify-content:flex-end; }
+
+.gc-footer { text-align:center; padding:24px; color:var(--gc-gray-60); font-size:11px; border-top:1px solid var(--gc-gray-90); margin-top:40px; }
+
+.gc-row-actions { display:flex; gap:4px; justify-content:flex-end; }
+.gc-icon-btn { background:none; border:none; cursor:pointer; padding:5px 8px; border-radius:4px; transition:var(--transition); color:var(--gc-gray-60); font-size:14px; }
+.gc-icon-btn:hover { background:var(--gc-gray-95); color:var(--gc-blue); }
+.gc-icon-btn.danger:hover { color:var(--gc-red); background:#fde8e8; }
+
+.week-banner { display:flex; align-items:center; gap:14px; margin-bottom:16px; flex-wrap:wrap; }
+.week-banner .week-nav { display:flex; gap:4px; align-items:center; }
+.week-banner .week-label { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:15px; color:var(--gc-gray-10); }
+.week-banner .week-sub { font-size:11px; color:var(--gc-gray-60); text-transform:uppercase; letter-spacing:1px; }
+.gc-pill { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; background:var(--gc-offwhite); border:1px solid var(--gc-gray-90); border-radius:999px; font-size:11px; font-weight:600; color:var(--gc-gray-40); }
+
+.submit-grid { display:grid; grid-template-columns: 1fr 1fr; gap:20px; }
+@media (max-width:900px){ .submit-grid { grid-template-columns:1fr; } }
+.submit-col { background:white; border:1px solid var(--gc-gray-90); border-radius:var(--radius); overflow:hidden; }
+.submit-col.actual .submit-col-head { background:#EAF4FE; color:#1F4E8C; }
+.submit-col.forecast .submit-col-head { background:#EDFBBD; color:#3E4C0A; }
+.submit-col-head { padding:14px 18px; border-bottom:1px solid var(--gc-gray-90); }
+.submit-col-head .ttl { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:14px; text-transform:uppercase; letter-spacing:1px; }
+.submit-col-head .week-of { font-size:11px; margin-top:2px; }
+.submit-rows { padding:0; }
+.submit-row { display:flex; align-items:center; padding:10px 18px; border-bottom:1px solid var(--gc-gray-95); gap:12px; }
+.submit-row:last-child { border-bottom:none; }
+.submit-row .proj { flex:1; font-weight:500; font-size:13px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.submit-row .proj-code { color:var(--gc-gray-60); font-size:11px; font-family:'Space Grotesk',sans-serif; }
+.submit-row input { width:90px; }
+.submit-foot { background:var(--gc-offwhite); padding:12px 18px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--gc-gray-90); }
+.submit-foot .lbl { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:1px; color:var(--gc-gray-40); }
+.submit-foot .val { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:18px; color:var(--gc-gray-10); }
+.submit-foot .val.over { color:var(--gc-red); }
+.submit-foot .val.ok { color:var(--gc-green); }
+
+.notice { padding:12px 16px; border-radius:8px; font-size:12px; margin-bottom:16px; display:flex; align-items:center; gap:10px; }
+.notice-info { background:#EAF4FE; color:#1F4E8C; border-left:3px solid var(--gc-blue); }
+.notice-warn { background:#FFF3E0; color:#8B5E00; border-left:3px solid var(--gc-amber); }
+.notice-success { background:#D6F4E2; color:#1B6B3F; border-left:3px solid var(--gc-green); }
+.notice-error { background:#FDECEA; color:#9C2616; border-left:3px solid var(--gc-red); }
+
+.expand-toggle { background:none; border:none; cursor:pointer; color:var(--gc-blue); font-size:12px; font-weight:600; padding:4px; }
+.detail-row td { background:#fafcff; padding:0 !important; }
+.detail-row .detail-inner { padding:14px 20px; }
+.detail-table { width:100%; font-size:12px; }
+.detail-table th { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:0.8px; color:var(--gc-gray-40); padding:6px 8px; text-align:left; }
+.detail-table th.r { text-align:right; }
+.detail-table td { padding:6px 8px; }
+.detail-table td.r { text-align:right; font-variant-numeric:tabular-nums; }
+
+.hide { display:none !important; }
+
+@media (max-width:1000px) {
+  .gc-grid-2,.gc-grid-3,.gc-grid-4,.gc-grid-5{grid-template-columns:1fr 1fr;}
+  .gc-header-inner{padding:12px 16px;}
+  .gc-main{padding:16px;}
+  .gc-logo-sep{display:none;}
+}
+@media (max-width:600px) {
+  .gc-grid-2,.gc-grid-3,.gc-grid-4,.gc-grid-5{grid-template-columns:1fr;}
+  .gc-user-chip{display:none;}
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     AUTH VIEW
+     ============================================================ -->
+<div id="authView" class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="wm">growthcapital</div>
+      <div class="sep">Workload Tracker</div>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="loginForm">
+      <div class="auth-title">Welcome back</div>
+      <div class="auth-sub">Sign in to log your workload</div>
+      <div class="auth-error" id="loginError"></div>
+      <div class="auth-info" id="loginInfo"></div>
+      <form class="auth-form" onsubmit="event.preventDefault(); doLogin();">
+        <div class="gc-form-group">
+          <label>Email</label>
+          <input type="email" class="gc-input" id="loginEmail" required autocomplete="username" placeholder="name@growth-capital.it">
+        </div>
+        <div class="gc-form-group">
+          <label>Password</label>
+          <input type="password" class="gc-input" id="loginPassword" required autocomplete="current-password">
+        </div>
+        <button class="gc-btn gc-btn-primary gc-btn-block" type="submit">Sign in</button>
+      </form>
+      <div class="auth-toggle">Don't have an account? <a onclick="showSignup()">Sign up</a></div>
+    </div>
+
+    <!-- SIGNUP -->
+    <div id="signupForm" class="hide">
+      <div class="auth-title">Create your account</div>
+      <div class="auth-sub" id="signupSub">Sign up with your company email</div>
+      <div class="auth-error" id="signupError"></div>
+      <form class="auth-form" onsubmit="event.preventDefault(); doSignup();">
+        <div class="gc-form-group">
+          <label>Full name</label>
+          <input type="text" class="gc-input" id="signupName" required placeholder="John Doe">
+        </div>
+        <div class="gc-form-group">
+          <label>Company email</label>
+          <input type="email" class="gc-input" id="signupEmail" required placeholder="name@growth-capital.it">
+        </div>
+        <div class="gc-form-group">
+          <label>Password (min 6 characters)</label>
+          <input type="password" class="gc-input" id="signupPassword" required minlength="6" autocomplete="new-password">
+        </div>
+        <button class="gc-btn gc-btn-primary gc-btn-block" type="submit">Sign up</button>
+      </form>
+      <div class="auth-toggle">Already have an account? <a onclick="showLogin()">Sign in</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     APP VIEW
+     ============================================================ -->
+<div id="appView" class="hide">
+
+  <header class="gc-header">
+    <div class="gc-header-inner">
+      <div class="gc-logo">
+        <span class="gc-logo-wordmark">growthcapital</span>
+        <span class="gc-logo-sep">Workload</span>
+      </div>
+      <div class="gc-header-actions">
+        <div class="gc-user-chip">
+          <div>
+            <div class="gc-user-name" id="hdrUserName"></div>
+            <div class="gc-user-role" id="hdrUserRole"></div>
+          </div>
+        </div>
+        <button class="gc-btn gc-btn-secondary" onclick="doLogout()">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="gc-tabs">
+    <div class="gc-tabs-inner" id="tabsBar"></div>
+  </nav>
+
+  <main class="gc-main">
+
+    <!-- ============ SUBMIT ============ -->
+    <section class="gc-section active" id="sec-submit">
+      <div class="gc-controls-panel">
+        <div class="gc-cp-title" id="submitTitle">Log your workload</div>
+        <div class="gc-cp-sub" id="submitSub">By Monday 18:00 — actual for last week + forecast for the current week</div>
+        <hr class="gc-cp-divider">
+        <div class="gc-cp-stats" id="submitStats"></div>
+      </div>
+
+      <div id="submitNotice"></div>
+
+      <div class="submit-grid">
+        <div class="submit-col actual">
+          <div class="submit-col-head">
+            <div class="ttl">Actual</div>
+            <div class="week-of" id="actualWeekOf">—</div>
+          </div>
+          <div class="submit-rows" id="actualRows"></div>
+          <div class="submit-foot">
+            <span class="lbl">Total hours</span>
+            <span class="val" id="actualTotal">0</span>
+          </div>
+        </div>
+
+        <div class="submit-col forecast">
+          <div class="submit-col-head">
+            <div class="ttl">Forecast</div>
+            <div class="week-of" id="forecastWeekOf">—</div>
+          </div>
+          <div class="submit-rows" id="forecastRows"></div>
+          <div class="submit-foot">
+            <span class="lbl">Total hours</span>
+            <span class="val" id="forecastTotal">0</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
+        <button class="gc-btn gc-btn-ghost" onclick="resetSubmitForm()">Discard changes</button>
+        <button class="gc-btn gc-btn-primary" id="submitBtn" onclick="submitWorkload()">Submit</button>
+      </div>
+    </section>
+
+    <!-- ============ HISTORY ============ -->
+    <section class="gc-section" id="sec-history">
+      <div class="gc-card">
+        <div class="gc-card-header">
+          <div>
+            <span class="gc-card-title" id="historyTitle">My history</span>
+            <div class="gc-card-sub" id="historySub">Past weeks you've logged</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <div id="historyUserPicker" class="hide" style="display:flex; align-items:center; gap:8px;">
+              <label style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--gc-gray-60); font-weight:600;">Person</label>
+              <select class="gc-select" id="historyUserSelect" style="min-width:200px" onchange="renderHistory()"></select>
+            </div>
+          </div>
+        </div>
+        <div class="gc-card-body gc-table-wrap">
+          <table class="gc-table" id="historyTable"></table>
+          <div class="gc-empty hide" id="historyEmpty">No submissions yet.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DASHBOARD (PL) ============ -->
+    <section class="gc-section" id="sec-dashboard">
+      <div class="gc-controls-panel">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px;">
+          <div>
+            <div class="gc-cp-title">Team Dashboard</div>
+            <div class="gc-cp-sub">Aggregated view across the team</div>
+          </div>
+          <div style="display:flex; gap:12px; align-items:flex-end;">
+            <div class="gc-form-group" style="margin-bottom:0; min-width:200px;">
+              <label>Range</label>
+              <select class="gc-select" id="dashRange" onchange="renderDashboard()">
+                <option value="4">Last 4 weeks</option>
+                <option value="8">Last 8 weeks</option>
+                <option value="13" selected>Last 13 weeks</option>
+                <option value="26">Last 26 weeks</option>
+                <option value="52">Last 52 weeks</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <hr class="gc-cp-divider">
+        <div class="gc-cp-stats" id="dashStats"></div>
+      </div>
+
+      <div class="gc-grid gc-grid-2">
+        <div class="gc-card">
+          <div class="gc-card-header"><span class="gc-card-title">Hours by project (Actual)</span></div>
+          <div class="gc-card-body"><div class="gc-chart-container"><canvas id="chartByProject"></canvas></div></div>
+        </div>
+        <div class="gc-card">
+          <div class="gc-card-header"><span class="gc-card-title">Weekly trend</span></div>
+          <div class="gc-card-body"><div class="gc-chart-container"><canvas id="chartWeekTrend"></canvas></div></div>
+        </div>
+      </div>
+
+      <div class="gc-card">
+        <div class="gc-card-header">
+          <span class="gc-card-title">Breakdown by project</span>
+          <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="exportProjectBreakdown()">↓ Excel</button>
+        </div>
+        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="projectBreakdownTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ============ BY PERSON (PL) ============ -->
+    <section class="gc-section" id="sec-people">
+      <div class="gc-card">
+        <div class="gc-card-header">
+          <div>
+            <span class="gc-card-title">By person</span>
+            <div class="gc-card-sub">Submission status week by week</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="exportPeopleMatrix()">↓ Excel</button>
+          </div>
+        </div>
+        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="peopleMatrixTable"></table></div>
+      </div>
+
+      <div class="gc-card">
+        <div class="gc-card-header">
+          <div>
+            <span class="gc-card-title">Workload by person</span>
+            <div class="gc-card-sub">Last 4 weeks — total actual hours</div>
+          </div>
+        </div>
+        <div class="gc-card-body"><div class="gc-chart-container" style="height:380px;"><canvas id="chartPersonLoad"></canvas></div></div>
+      </div>
+    </section>
+
+    <!-- ============ VARIANCE (PL) ============ -->
+    <section class="gc-section" id="sec-variance">
+      <div class="gc-card">
+        <div class="gc-card-header">
+          <div>
+            <span class="gc-card-title">Forecast vs Actual</span>
+            <div class="gc-card-sub">Same-week comparison: only (person, week) pairs where both forecast and actual were submitted are included.</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:flex-end;">
+            <div class="gc-form-group" style="margin-bottom:0; min-width:180px;">
+              <label>Group by</label>
+              <select class="gc-select" id="varianceGroupBy" onchange="renderVariance()">
+                <option value="person">Person</option>
+                <option value="project">Project / Deal</option>
+              </select>
+            </div>
+            <div class="gc-form-group" style="margin-bottom:0; min-width:180px;">
+              <label>Range</label>
+              <select class="gc-select" id="varianceRange" onchange="renderVariance()">
+                <option value="4">Last 4 weeks</option>
+                <option value="8" selected>Last 8 weeks</option>
+                <option value="13">Last 13 weeks</option>
+                <option value="26">Last 26 weeks</option>
+              </select>
+            </div>
+            <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="exportVariance()">↓ Excel</button>
+          </div>
+        </div>
+        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="varianceTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ============ PROJECTS (PL) ============ -->
+    <section class="gc-section" id="sec-projects">
+      <div class="gc-card">
+        <div class="gc-card-header">
+          <div>
+            <span class="gc-card-title">Projects &amp; Deals</span>
+            <div class="gc-card-sub">Drag rows to reorder — the order is saved and shared across all PLs</div>
+          </div>
+          <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="openProjectModal()">+ Add item</button>
+        </div>
+        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="projectsTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ============ TEAM / SETTINGS (PL) ============ -->
+    <section class="gc-section" id="sec-settings">
+      <div class="gc-grid gc-grid-2">
+        <div class="gc-card">
+          <div class="gc-card-header">
+            <div>
+              <span class="gc-card-title">Team</span>
+              <div class="gc-card-sub">Registered users and roles</div>
+            </div>
+            <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="openInviteModal()">+ Invite</button>
+          </div>
+          <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="usersTable"></table></div>
+        </div>
+
+        <div class="gc-card">
+          <div class="gc-card-header">
+            <div>
+              <span class="gc-card-title">Settings</span>
+              <div class="gc-card-sub">Global parameters</div>
+            </div>
+          </div>
+          <div class="gc-card-body">
+            <div class="gc-form-group">
+              <label>Analyst edit window (days)</label>
+              <input type="number" class="gc-input" id="settingsEditWindow" min="0" max="365" step="1">
+              <div style="font-size:11px; color:var(--gc-gray-60); margin-top:6px;">How many days an Analyst can edit their own submission. After that, only PLs can correct it.</div>
+            </div>
+            <div class="gc-form-group">
+              <label>Weekly hours target</label>
+              <input type="number" class="gc-input" id="settingsHoursTarget" min="0" max="100" step="1">
+              <div style="font-size:11px; color:var(--gc-gray-60); margin-top:6px;">Threshold used for overload warnings in the dashboards.</div>
+            </div>
+            <button class="gc-btn gc-btn-primary" onclick="saveSettings()">Save settings</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="gc-card">
+        <div class="gc-card-header">
+          <div>
+            <span class="gc-card-title">Data &amp; backup</span>
+            <div class="gc-card-sub">Export or wipe all local data</div>
+          </div>
+        </div>
+        <div class="gc-card-body" style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="gc-btn gc-btn-ghost" onclick="exportAllJSON()">↓ Backup JSON</button>
+          <button class="gc-btn gc-btn-ghost" onclick="document.getElementById('importJsonInput').click()">↑ Restore JSON</button>
+          <input type="file" id="importJsonInput" accept=".json" style="display:none" onchange="importAllJSON(event)">
+          <button class="gc-btn gc-btn-danger" onclick="clearAllData()">× Wipe all</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="gc-footer"><strong>Growth Capital</strong> — Milan | Madrid | London &middot; Workload Tracker &middot; Confidential</footer>
+</div>
+
+<!-- ============================================================
+     MODALS
+     ============================================================ -->
+<div class="gc-modal-overlay" id="projectModal">
+  <div class="gc-modal">
+    <div class="gc-modal-header">
+      <span class="gc-modal-title" id="projectModalTitle">Add item</span>
+      <button class="gc-modal-close" onclick="closeModal('projectModal')">×</button>
+    </div>
+    <div class="gc-modal-body">
+      <div class="gc-form-group">
+        <label>Type</label>
+        <select class="gc-select" id="pm_type">
+          <option value="Deal">Deal</option>
+          <option value="Project" selected>Project</option>
+        </select>
+        <div style="font-size:11px; color:var(--gc-gray-60); margin-top:6px;">A "Deal" usually maps to a client engagement; a "Project" to internal/operational work.</div>
+      </div>
+      <div class="gc-form-group">
+        <label>Name</label>
+        <input type="text" class="gc-input" id="pm_name" placeholder="e.g., Deal Alpha">
+      </div>
+      <div class="gc-form-group">
+        <label>Short code (optional)</label>
+        <input type="text" class="gc-input" id="pm_code" placeholder="e.g., ALPHA" maxlength="12">
+      </div>
+      <div class="gc-form-group">
+        <label>Status</label>
+        <select class="gc-select" id="pm_status">
+          <option value="active">Active</option>
+          <option value="archived">Archived</option>
+        </select>
+      </div>
+    </div>
+    <div class="gc-modal-footer">
+      <button class="gc-btn gc-btn-secondary" style="color:var(--gc-gray-40)" onclick="closeModal('projectModal')">Cancel</button>
+      <button class="gc-btn gc-btn-primary" onclick="saveProject()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="gc-modal-overlay" id="inviteModal">
+  <div class="gc-modal">
+    <div class="gc-modal-header">
+      <span class="gc-modal-title">Invite a colleague</span>
+      <button class="gc-modal-close" onclick="closeModal('inviteModal')">×</button>
+    </div>
+    <div class="gc-modal-body">
+      <div class="notice notice-info" style="margin-bottom:14px;">
+        In mock mode, the invite directly creates the account with the temporary password you set. Share the credentials with your colleague; they'll be able to change the password later (once we integrate Supabase).
+      </div>
+      <div class="gc-form-group">
+        <label>Full name</label>
+        <input type="text" class="gc-input" id="im_name">
+      </div>
+      <div class="gc-form-group">
+        <label>Email</label>
+        <input type="email" class="gc-input" id="im_email">
+      </div>
+      <div class="gc-form-group">
+        <label>Temporary password</label>
+        <input type="text" class="gc-input" id="im_password" placeholder="min 6 characters">
+      </div>
+      <div class="gc-form-group">
+        <label>Role</label>
+        <select class="gc-select" id="im_role">
+          <option value="Analyst">Analyst</option>
+          <option value="PL">PL</option>
+        </select>
+      </div>
+    </div>
+    <div class="gc-modal-footer">
+      <button class="gc-btn gc-btn-secondary" style="color:var(--gc-gray-40)" onclick="closeModal('inviteModal')">Cancel</button>
+      <button class="gc-btn gc-btn-primary" onclick="saveInvite()">Create account</button>
+    </div>
+  </div>
+</div>
+
+<div class="gc-modal-overlay" id="editRecordModal">
+  <div class="gc-modal" style="width:700px;">
+    <div class="gc-modal-header">
+      <span class="gc-modal-title" id="erm_title">Edit submission</span>
+      <button class="gc-modal-close" onclick="closeModal('editRecordModal')">×</button>
+    </div>
+    <div class="gc-modal-body">
+      <div id="erm_meta" style="margin-bottom:14px; font-size:12px; color:var(--gc-gray-60);"></div>
+      <div class="submit-grid" style="gap:14px;">
+        <div class="submit-col actual">
+          <div class="submit-col-head">
+            <div class="ttl">Actual</div>
+            <div class="week-of" id="erm_actual_week">—</div>
+          </div>
+          <div class="submit-rows" id="erm_actualRows"></div>
+          <div class="submit-foot">
+            <span class="lbl">Total</span>
+            <span class="val" id="erm_actualTotal">0</span>
+          </div>
+        </div>
+        <div class="submit-col forecast">
+          <div class="submit-col-head">
+            <div class="ttl">Forecast</div>
+            <div class="week-of" id="erm_forecast_week">—</div>
+          </div>
+          <div class="submit-rows" id="erm_forecastRows"></div>
+          <div class="submit-foot">
+            <span class="lbl">Total</span>
+            <span class="val" id="erm_forecastTotal">0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="gc-modal-footer">
+      <button class="gc-btn gc-btn-secondary" style="color:var(--gc-gray-40)" onclick="closeModal('editRecordModal')">Cancel</button>
+      <button class="gc-btn gc-btn-primary" id="erm_saveBtn" onclick="saveEditRecord()">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =========================================================
+// SUPABASE CLIENT
+// =========================================================
+const SUPABASE_URL = 'https://jhqyzjvkpzigmbsdegke.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_cRVFRHzKrxK5YsdvBC464A_Y3ppUpHO';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const DEFAULT_SETTINGS = { edit_window_days: 14, hours_per_week_target: 40 };
+const PROJECT_TYPES = ['Deal', 'Project'];
+
+let state = { users: [], projects: [], records: [], settings: { ...DEFAULT_SETTINGS }, currentUser: null };
+let editingRecord = null;
+let editingProjectId = null;
+let dragSrcId = null;
+
+async function loadAllFromSupabase() {
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return false;
+
+  // If profile doesn't exist (deleted user), sign out silently
+  const { data: myProfile } = await sb.from('profiles').select('*').eq('id', user.id).single();
+  if (!myProfile) { await sb.auth.signOut(); return false; }
+
+  const [{ data: profiles }, { data: projects }, { data: records }, { data: settingsRow }] = await Promise.all([
+    sb.from('profiles').select('*'),
+    sb.from('projects').select('*').order('ord'),
+    sb.from('records').select('*'),
+    sb.from('settings').select('*').single()
+  ]);
+
+  state.users    = profiles || [];
+  state.projects = (projects || []).map(p => ({ ...p, order: p.ord }));
+  state.records  = (records  || []).map(r => ({ ...r, entries: Array.isArray(r.entries) ? r.entries : [] }));
+  state.settings = Object.assign({}, DEFAULT_SETTINGS, settingsRow || {});
+  state.currentUser = myProfile;
+  return true;
+}
+
+// save functions — update state in-memory then sync to Supabase (fire-and-forget)
+function saveUsers() { /* individual profile updates go through changeUserRole / deleteUser */ }
+
+function saveProjects() {
+  const rows = state.projects.map(({ order, ...p }) => ({ ...p, ord: order }));
+  sb.from('projects').upsert(rows).then(({ error }) => { if (error) console.error('saveProjects:', error); });
+}
+
+function saveRecords() {
+  sb.from('records').upsert(state.records).then(({ error }) => { if (error) console.error('saveRecords:', error); });
+}
+
+function saveSettingsState() {
+  sb.from('settings').upsert({ id: 1, ...state.settings }).then(({ error }) => { if (error) console.error('saveSettings:', error); });
+}
+
+function saveSession() { /* session managed by Supabase Auth */ }
+
+function uid() { return Math.random().toString(36).slice(2, 11) + Date.now().toString(36); }
+
+
+// =========================================================
+// DATE / WEEK HELPERS
+// =========================================================
+function ymd(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function parseYmd(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function mondayOf(date) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dow = d.getDay();
+  const offset = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + offset);
+  return d;
+}
+function addDays(d, n) {
+  const r = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  r.setDate(r.getDate() + n);
+  return r;
+}
+const EN_MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const EN_MONTHS_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function fmtWeekRange(mondayStr) {
+  const mon = parseYmd(mondayStr);
+  const sun = addDays(mon, 6);
+  const sameMonth = mon.getMonth() === sun.getMonth();
+  if (sameMonth) {
+    return `${mon.getDate()}–${sun.getDate()} ${EN_MONTHS_LONG[mon.getMonth()]} ${sun.getFullYear()}`;
+  }
+  return `${mon.getDate()} ${EN_MONTHS_SHORT[mon.getMonth()]} – ${sun.getDate()} ${EN_MONTHS_SHORT[sun.getMonth()]} ${sun.getFullYear()}`;
+}
+function fmtWeekShort(mondayStr) {
+  const mon = parseYmd(mondayStr);
+  return `${mon.getDate()} ${EN_MONTHS_SHORT[mon.getMonth()]}`;
+}
+function fmtDate(d) {
+  return new Date(d).toLocaleDateString('en-GB');
+}
+function fmtDateTime(d) {
+  return new Date(d).toLocaleString('en-GB');
+}
+function isoWeekNumber(date) {
+  const t = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dow = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - dow);
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t - yearStart) / 86400000 + 1) / 7);
+}
+
+// =========================================================
+// AUTH
+// =========================================================
+function showLogin() {
+  document.getElementById('loginForm').classList.remove('hide');
+  document.getElementById('signupForm').classList.add('hide');
+  document.getElementById('loginError').style.display = 'none';
+  document.getElementById('loginInfo').style.display = 'none';
+}
+function showSignup() {
+  document.getElementById('loginForm').classList.add('hide');
+  document.getElementById('signupForm').classList.remove('hide');
+  document.getElementById('signupError').style.display = 'none';
+  document.getElementById('signupSub').textContent = 'Sign up with your company email (default role: Analyst).';
+}
+function showAuthError(id, msg) {
+  const el = document.getElementById(id);
+  el.className = 'auth-error';
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function showAuthInfo(id, msg) {
+  const el = document.getElementById(id);
+  el.className = 'auth-info';
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const pw = document.getElementById('loginPassword').value;
+  const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+  if (error) return showAuthError('loginError', error.message === 'Invalid login credentials'
+    ? 'Wrong email or password.' : error.message);
+  // onAuthStateChange handles the rest
+}
+async function doSignup() {
+  const name  = document.getElementById('signupName').value.trim();
+  const email = document.getElementById('signupEmail').value.trim().toLowerCase();
+  const pw    = document.getElementById('signupPassword').value;
+  if (!name || !email || pw.length < 6)
+    return showAuthError('signupError', 'Please fill all fields (password at least 6 characters).');
+  const { error } = await sb.auth.signUp({ email, password: pw, options: { data: { name } } });
+  if (error) return showAuthError('signupError', error.message);
+  // If email confirmation is enabled in Supabase, the session is null until confirmed.
+  // Show the login form with an info message.
+  showLogin();
+  showAuthInfo('loginInfo', 'Account created! If email confirmation is enabled, check your inbox before signing in.');
+}
+async function doLogout() {
+  await sb.auth.signOut();
+  location.reload();
+}
+function currentUser() {
+  return state.currentUser || null;
+}
+
+async function seedDemoProjects() {
+  if (state.projects.length > 0) return;
+  state.projects = [
+    { id: uid(), name: 'Internal / Admin', code: 'INT', type: 'Project', status: 'active', order: 0, created_at: new Date().toISOString() },
+    { id: uid(), name: 'Business Development', code: 'BD', type: 'Project', status: 'active', order: 1, created_at: new Date().toISOString() },
+  ];
+  saveProjects();
+}
+
+// =========================================================
+// APP ENTRY
+// =========================================================
+async function enterApp() {
+  const u = currentUser();
+  if (!u) { document.getElementById('authView').classList.remove('hide'); document.getElementById('appView').classList.add('hide'); return; }
+  // Seed demo projects for the very first PL
+  if (u.role === 'PL') await seedDemoProjects();
+  document.getElementById('authView').classList.add('hide');
+  document.getElementById('appView').classList.remove('hide');
+  document.getElementById('hdrUserName').textContent = u.name;
+  document.getElementById('hdrUserRole').textContent = u.role;
+  buildTabs();
+  hydrateSettingsInputs();
+  renderActiveSection();
+}
+function buildTabs() {
+  const u = currentUser();
+  const tabs = [
+    { id: 'submit', label: 'Submit' },
+    { id: 'history', label: 'History' },
+  ];
+  if (u.role === 'PL') {
+    tabs.push({ id: 'dashboard', label: 'Dashboard' });
+    tabs.push({ id: 'people', label: 'By Person' });
+    tabs.push({ id: 'variance', label: 'Variance' });
+    tabs.push({ id: 'projects', label: 'Projects' });
+    tabs.push({ id: 'settings', label: 'Team & Setup' });
+  }
+  const bar = document.getElementById('tabsBar');
+  bar.innerHTML = tabs.map((t, i) => `<button class="gc-tab ${i===0?'active':''}" data-tab="${t.id}">${t.label}</button>`).join('');
+  bar.querySelectorAll('.gc-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      bar.querySelectorAll('.gc-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.gc-section').forEach(s => s.classList.remove('active'));
+      document.getElementById('sec-' + btn.dataset.tab).classList.add('active');
+      renderActiveSection();
+    });
+  });
+}
+function activeTabId() {
+  const a = document.querySelector('.gc-tab.active');
+  return a ? a.dataset.tab : 'submit';
+}
+function renderActiveSection() {
+  const t = activeTabId();
+  if (t === 'submit') renderSubmit();
+  else if (t === 'history') renderHistory();
+  else if (t === 'dashboard') renderDashboard();
+  else if (t === 'people') renderPeopleMatrix();
+  else if (t === 'variance') renderVariance();
+  else if (t === 'projects') renderProjects();
+  else if (t === 'settings') renderSettings();
+}
+
+// =========================================================
+// PROJECT ORDERING
+// =========================================================
+function sortedProjects(list) {
+  return [...list].sort((a, b) => {
+    const oa = typeof a.order === 'number' ? a.order : 9999;
+    const ob = typeof b.order === 'number' ? b.order : 9999;
+    if (oa !== ob) return oa - ob;
+    return a.name.localeCompare(b.name);
+  });
+}
+function activeProjects() {
+  return sortedProjects(state.projects.filter(p => p.status === 'active'));
+}
+function nextProjectOrder() {
+  if (state.projects.length === 0) return 0;
+  return Math.max(...state.projects.map(p => typeof p.order === 'number' ? p.order : 0)) + 1;
+}
+function projectTypeBadge(type) {
+  const t = type === 'Deal' ? 'Deal' : 'Project';
+  const cls = t === 'Deal' ? 'gc-badge-blue' : 'gc-badge-lime';
+  return `<span class="gc-badge ${cls}">${t}</span>`;
+}
+
+// =========================================================
+// SUBMIT VIEW
+// =========================================================
+function findRecord(user_id, week_start, type) {
+  return state.records.find(r => r.user_id === user_id && r.week_start === week_start && r.type === type);
+}
+
+function entriesForForm(user_id, week_start, type) {
+  const rec = findRecord(user_id, week_start, type);
+  const map = {};
+  if (rec) rec.entries.forEach(e => { map[e.project_id] = Number(e.hours) || 0; });
+  return activeProjects().map(p => ({ project_id: p.id, name: p.name, code: p.code, type: p.type || 'Project', hours: map[p.id] || 0 }));
+}
+
+function isRecordLockedForUser(rec, user) {
+  if (!rec) return false;
+  if (user.role === 'PL') return false;
+  const win = Number(state.settings.edit_window_days) || 0;
+  if (win <= 0) return false;
+  const submitted = new Date(rec.submitted_at || rec.updated_at || Date.now());
+  const ageDays = (Date.now() - submitted.getTime()) / 86400000;
+  return ageDays > win;
+}
+
+function renderSubmit() {
+  const u = currentUser();
+  const today = new Date();
+  const thisMon = mondayOf(today);
+  const lastMon = addDays(thisMon, -7);
+  const actualWeek = ymd(lastMon);
+  const forecastWeek = ymd(thisMon);
+
+  document.getElementById('actualWeekOf').textContent = 'Week of ' + fmtWeekRange(actualWeek);
+  document.getElementById('forecastWeekOf').textContent = 'Week of ' + fmtWeekRange(forecastWeek);
+
+  const actualRec = findRecord(u.id, actualWeek, 'actual');
+  const forecastRec = findRecord(u.id, forecastWeek, 'forecast');
+  const actualLocked = isRecordLockedForUser(actualRec, u);
+  const forecastLocked = isRecordLockedForUser(forecastRec, u);
+
+  const noticeEl = document.getElementById('submitNotice');
+  let html = '';
+  if (actualRec && forecastRec) {
+    html = `<div class="notice notice-success">✔ You've already submitted for this week. ${actualLocked && forecastLocked ? 'Contact a PL to make further changes.' : 'You can edit the values below and resubmit.'}</div>`;
+  } else if (actualRec || forecastRec) {
+    html = `<div class="notice notice-info">You've only partially submitted. Complete the other column and resubmit.</div>`;
+  } else {
+    const dow = today.getDay();
+    if (dow > 1 || (dow === 1 && today.getHours() >= 18)) {
+      html = `<div class="notice notice-warn">⚠ You're past the soft deadline (Monday 18:00). Please submit as soon as possible.</div>`;
+    }
+  }
+  noticeEl.innerHTML = html;
+
+  const target = Number(state.settings.hours_per_week_target) || 40;
+  const lastSub = state.records.filter(r => r.user_id === u.id).sort((a,b) => (b.submitted_at||'').localeCompare(a.submitted_at||''))[0];
+  document.getElementById('submitStats').innerHTML = `
+    <div><div class="gc-cp-stat-label">Weekly target</div><div class="gc-cp-stat-value lime">${target}h</div></div>
+    <div><div class="gc-cp-stat-label">Actual week</div><div class="gc-cp-stat-value wh" style="font-size:14px">${fmtWeekRange(actualWeek)}</div></div>
+    <div><div class="gc-cp-stat-label">Forecast week</div><div class="gc-cp-stat-value wh" style="font-size:14px">${fmtWeekRange(forecastWeek)}</div></div>
+    <div><div class="gc-cp-stat-label">Last submission</div><div class="gc-cp-stat-value wh" style="font-size:14px">${lastSub ? fmtDate(lastSub.submitted_at) : '—'}</div></div>
+  `;
+
+  const aEntries = entriesForForm(u.id, actualWeek, 'actual');
+  const fEntries = entriesForForm(u.id, forecastWeek, 'forecast');
+
+  if (aEntries.length === 0) {
+    document.getElementById('actualRows').innerHTML = `<div class="gc-empty">No active projects. ${u.role==='PL'?'Go to the Projects tab to add one.':'Ask a PL to create them.'}</div>`;
+    document.getElementById('forecastRows').innerHTML = `<div class="gc-empty">No active projects.</div>`;
+  } else {
+    document.getElementById('actualRows').innerHTML = aEntries.map(e => submitRowHtml(e, 'a', actualLocked)).join('');
+    document.getElementById('forecastRows').innerHTML = fEntries.map(e => submitRowHtml(e, 'f', forecastLocked)).join('');
+  }
+
+  document.getElementById('submitBtn').disabled = (actualLocked && forecastLocked) || aEntries.length === 0;
+  if (actualLocked && forecastLocked) {
+    document.getElementById('submitBtn').textContent = 'Locked (outside edit window)';
+  } else {
+    document.getElementById('submitBtn').textContent = (actualRec || forecastRec) ? 'Save changes' : 'Submit';
+  }
+
+  recomputeSubmitTotals();
+}
+
+function submitRowHtml(e, prefix, locked) {
+  const codeHtml = e.code ? `<span class="proj-code">${escapeHtml(e.code)}</span>` : '';
+  return `
+    <div class="submit-row">
+      <span class="proj">${projectTypeBadge(e.type)}<span>${escapeHtml(e.name)}</span>${codeHtml}</span>
+      <input type="number" min="0" max="168" step="0.5" class="gc-input small r" data-prefix="${prefix}" data-project="${e.project_id}" value="${e.hours || ''}" placeholder="0" oninput="recomputeSubmitTotals()" ${locked?'disabled':''}>
+    </div>
+  `;
+}
+
+function readSubmitForm() {
+  const a = [...document.querySelectorAll('#actualRows input[data-prefix="a"]')].map(i => ({ project_id: i.dataset.project, hours: parseFloat(i.value) || 0 }));
+  const f = [...document.querySelectorAll('#forecastRows input[data-prefix="f"]')].map(i => ({ project_id: i.dataset.project, hours: parseFloat(i.value) || 0 }));
+  return { actual: a, forecast: f };
+}
+
+function recomputeSubmitTotals() {
+  const { actual, forecast } = readSubmitForm();
+  const target = Number(state.settings.hours_per_week_target) || 40;
+  const aSum = actual.reduce((s, e) => s + e.hours, 0);
+  const fSum = forecast.reduce((s, e) => s + e.hours, 0);
+  const aEl = document.getElementById('actualTotal');
+  const fEl = document.getElementById('forecastTotal');
+  aEl.textContent = aSum.toFixed(1).replace(/\.0$/, '') + 'h';
+  fEl.textContent = fSum.toFixed(1).replace(/\.0$/, '') + 'h';
+  aEl.className = 'val' + (aSum > target * 1.25 ? ' over' : (aSum > 0 ? ' ok' : ''));
+  fEl.className = 'val' + (fSum > target * 1.25 ? ' over' : (fSum > 0 ? ' ok' : ''));
+}
+
+function resetSubmitForm() { renderSubmit(); }
+
+function submitWorkload() {
+  const u = currentUser();
+  const today = new Date();
+  const thisMon = ymd(mondayOf(today));
+  const lastMon = ymd(addDays(mondayOf(today), -7));
+  const { actual, forecast } = readSubmitForm();
+  const now = new Date().toISOString();
+
+  upsertRecord(u.id, lastMon, 'actual', actual, now);
+  upsertRecord(u.id, thisMon, 'forecast', forecast, now);
+
+  saveRecords();
+  renderSubmit();
+  flashNotice('Workload submitted.');
+}
+
+function upsertRecord(user_id, week_start, type, entries, ts) {
+  const existing = findRecord(user_id, week_start, type);
+  const clean = entries.filter(e => e.hours > 0);
+  if (existing) {
+    existing.entries = clean;
+    existing.updated_at = ts;
+  } else {
+    state.records.push({ id: uid(), user_id, week_start, type, entries: clean, submitted_at: ts, updated_at: ts });
+  }
+}
+
+function flashNotice(msg) {
+  const n = document.createElement('div');
+  n.className = 'notice notice-success';
+  n.style.position = 'fixed';
+  n.style.right = '20px';
+  n.style.top = '80px';
+  n.style.zIndex = '300';
+  n.style.boxShadow = 'var(--shadow-lg)';
+  n.textContent = '✔ ' + msg;
+  document.body.appendChild(n);
+  setTimeout(() => n.remove(), 2500);
+}
+
+// =========================================================
+// HISTORY VIEW
+// =========================================================
+function renderHistory() {
+  const u = currentUser();
+  const userPickerWrap = document.getElementById('historyUserPicker');
+  if (u.role === 'PL') {
+    userPickerWrap.classList.remove('hide');
+    const sel = document.getElementById('historyUserSelect');
+    if (sel.options.length !== state.users.length + 1) {
+      const current = sel.value;
+      sel.innerHTML = '<option value="__me">Only me (' + escapeHtml(u.name) + ')</option>' +
+        [...state.users].sort((a,b)=>a.name.localeCompare(b.name)).map(x => `<option value="${x.id}">${escapeHtml(x.name)} — ${x.role}</option>`).join('');
+      sel.value = current || '__me';
+    }
+  } else {
+    userPickerWrap.classList.add('hide');
+  }
+
+  const sel = document.getElementById('historyUserSelect');
+  const targetUserId = (u.role === 'PL' && sel.value && sel.value !== '__me') ? sel.value : u.id;
+  const targetUser = state.users.find(x => x.id === targetUserId);
+  document.getElementById('historyTitle').textContent = (targetUserId === u.id) ? 'My history' : `History — ${targetUser.name}`;
+
+  const userRecords = state.records.filter(r => r.user_id === targetUserId);
+  const weeks = new Set();
+  userRecords.forEach(r => weeks.add(r.week_start));
+  const thisMon = mondayOf(new Date());
+  for (let i = 0; i < 12; i++) weeks.add(ymd(addDays(thisMon, -7 * i)));
+  const weekArr = [...weeks].sort().reverse();
+
+  const tbl = document.getElementById('historyTable');
+  const empty = document.getElementById('historyEmpty');
+  if (weekArr.length === 0) {
+    tbl.innerHTML = '';
+    empty.classList.remove('hide');
+    return;
+  }
+  empty.classList.add('hide');
+
+  const canEditPast = (u.role === 'PL');
+  const rows = weekArr.map(w => {
+    const actual = userRecords.find(r => r.week_start === w && r.type === 'actual');
+    const forecast = userRecords.find(r => r.week_start === w && r.type === 'forecast');
+    const aHours = actual ? actual.entries.reduce((s,e)=>s+e.hours, 0) : null;
+    const fHours = forecast ? forecast.entries.reduce((s,e)=>s+e.hours, 0) : null;
+    const status = (actual && forecast) ? 'complete' : (actual || forecast) ? 'partial' : 'missing';
+    const aLocked = isRecordLockedForUser(actual, u);
+    const fLocked = isRecordLockedForUser(forecast, u);
+    const editable = canEditPast || !(aLocked && fLocked && actual && forecast);
+    return `
+      <tr data-week="${w}">
+        <td class="m">${fmtWeekRange(w)}<div style="font-size:11px;color:var(--gc-gray-60)">W${isoWeekNumber(parseYmd(w))}</div></td>
+        <td>${actual ? `<span class="gc-badge gc-badge-blue">Submitted</span><div style="font-size:11px;color:var(--gc-gray-60);margin-top:2px;">${fmtDate(actual.submitted_at)}</div>` : `<span class="gc-badge gc-badge-gray">—</span>`}</td>
+        <td class="r m">${aHours == null ? '—' : aHours.toFixed(1).replace(/\.0$/,'') + 'h'}</td>
+        <td>${forecast ? `<span class="gc-badge gc-badge-lime">Submitted</span><div style="font-size:11px;color:var(--gc-gray-60);margin-top:2px;">${fmtDate(forecast.submitted_at)}</div>` : `<span class="gc-badge gc-badge-gray">—</span>`}</td>
+        <td class="r m">${fHours == null ? '—' : fHours.toFixed(1).replace(/\.0$/,'') + 'h'}</td>
+        <td>${statusBadge(status)}</td>
+        <td class="r">
+          <div class="gc-row-actions">
+            <button class="gc-icon-btn" title="Expand detail" onclick="toggleHistoryDetail('${w}', '${targetUserId}', this)">▾</button>
+            ${editable ? `<button class="gc-icon-btn" title="Edit" onclick="openEditRecord('${targetUserId}', '${w}')">✎</button>` : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  tbl.innerHTML = `
+    <thead>
+      <tr>
+        <th>Week</th>
+        <th>Actual</th>
+        <th class="r">Actual hours</th>
+        <th>Forecast</th>
+        <th class="r">Forecast hours</th>
+        <th>Status</th>
+        <th class="r">Actions</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  `;
+}
+
+function statusBadge(s) {
+  if (s === 'complete') return `<span class="gc-badge gc-badge-green">Complete</span>`;
+  if (s === 'partial')  return `<span class="gc-badge gc-badge-amber">Partial</span>`;
+  return `<span class="gc-badge gc-badge-red">Missing</span>`;
+}
+
+function toggleHistoryDetail(week, user_id, btn) {
+  const tr = btn.closest('tr');
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains('detail-row')) {
+    next.remove();
+    btn.textContent = '▾';
+    return;
+  }
+  const actual = state.records.find(r => r.user_id === user_id && r.week_start === week && r.type === 'actual');
+  const forecast = state.records.find(r => r.user_id === user_id && r.week_start === week && r.type === 'forecast');
+  const projMap = {}; state.projects.forEach(p => projMap[p.id] = p);
+  const projectIds = new Set([
+    ...(actual ? actual.entries.map(e => e.project_id) : []),
+    ...(forecast ? forecast.entries.map(e => e.project_id) : [])
+  ]);
+  const aMap = {}; if (actual) actual.entries.forEach(e => aMap[e.project_id] = e.hours);
+  const fMap = {}; if (forecast) forecast.entries.forEach(e => fMap[e.project_id] = e.hours);
+  const orderedIds = sortedProjects([...projectIds].map(id => projMap[id]).filter(Boolean)).map(p => p.id);
+  // Append any orphan ids (deleted projects) at the end
+  [...projectIds].forEach(id => { if (!orderedIds.includes(id)) orderedIds.push(id); });
+  const rows = orderedIds.map(pid => {
+    const p = projMap[pid];
+    const typeLbl = p ? projectTypeBadge(p.type) : '';
+    return `<tr><td>${typeLbl} ${escapeHtml(p ? p.name : 'Deleted item')}</td><td class="r">${aMap[pid] != null ? aMap[pid].toFixed(1).replace(/\.0$/,'') + 'h' : '—'}</td><td class="r">${fMap[pid] != null ? fMap[pid].toFixed(1).replace(/\.0$/,'') + 'h' : '—'}</td></tr>`;
+  }).join('');
+  const inner = projectIds.size === 0
+    ? `<div style="padding:12px;color:var(--gc-gray-60);font-size:12px;">No project detail.</div>`
+    : `<div class="detail-inner"><table class="detail-table"><thead><tr><th>Project / Deal</th><th class="r">Actual</th><th class="r">Forecast</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const newRow = document.createElement('tr');
+  newRow.className = 'detail-row';
+  newRow.innerHTML = `<td colspan="7">${inner}</td>`;
+  tr.parentNode.insertBefore(newRow, tr.nextSibling);
+  btn.textContent = '▴';
+}
+
+// =========================================================
+// EDIT RECORD MODAL
+// =========================================================
+function openEditRecord(user_id, week_start) {
+  editingRecord = { user_id, week_actual: week_start, week_forecast: week_start };
+  const u = state.users.find(x => x.id === user_id);
+  const me = currentUser();
+  document.getElementById('erm_title').textContent = `Edit — ${u.name} — ${fmtWeekRange(week_start)}`;
+  document.getElementById('erm_actual_week').textContent = fmtWeekRange(week_start);
+  document.getElementById('erm_forecast_week').textContent = fmtWeekRange(week_start);
+
+  const aRec = findRecord(user_id, week_start, 'actual');
+  const fRec = findRecord(user_id, week_start, 'forecast');
+  const aLocked = isRecordLockedForUser(aRec, me);
+  const fLocked = isRecordLockedForUser(fRec, me);
+
+  const aEntries = entriesForForm(user_id, week_start, 'actual');
+  const fEntries = entriesForForm(user_id, week_start, 'forecast');
+
+  document.getElementById('erm_actualRows').innerHTML = aEntries.map(e => editRowHtml(e, 'ea', aLocked)).join('') || '<div class="gc-empty">No active projects.</div>';
+  document.getElementById('erm_forecastRows').innerHTML = fEntries.map(e => editRowHtml(e, 'ef', fLocked)).join('') || '<div class="gc-empty">No active projects.</div>';
+
+  const metaParts = [];
+  if (aRec) metaParts.push('Actual submitted on: ' + fmtDateTime(aRec.submitted_at));
+  if (fRec) metaParts.push('Forecast submitted on: ' + fmtDateTime(fRec.submitted_at));
+  document.getElementById('erm_meta').textContent = metaParts.join(' · ') || "No submission for this week yet — you'll create it now.";
+  document.getElementById('erm_saveBtn').disabled = aLocked && fLocked;
+  document.getElementById('erm_saveBtn').textContent = (aLocked && fLocked) ? 'Locked' : 'Save changes';
+  openModal('editRecordModal');
+  recomputeEditTotals();
+}
+function editRowHtml(e, prefix, locked) {
+  const codeHtml = e.code ? `<span class="proj-code">${escapeHtml(e.code)}</span>` : '';
+  return `
+    <div class="submit-row">
+      <span class="proj">${projectTypeBadge(e.type)}<span>${escapeHtml(e.name)}</span>${codeHtml}</span>
+      <input type="number" min="0" max="168" step="0.5" class="gc-input small r" data-prefix="${prefix}" data-project="${e.project_id}" value="${e.hours || ''}" placeholder="0" oninput="recomputeEditTotals()" ${locked?'disabled':''}>
+    </div>
+  `;
+}
+function recomputeEditTotals() {
+  const a = [...document.querySelectorAll('#erm_actualRows input[data-prefix="ea"]')].reduce((s, i) => s + (parseFloat(i.value)||0), 0);
+  const f = [...document.querySelectorAll('#erm_forecastRows input[data-prefix="ef"]')].reduce((s, i) => s + (parseFloat(i.value)||0), 0);
+  document.getElementById('erm_actualTotal').textContent = a.toFixed(1).replace(/\.0$/,'') + 'h';
+  document.getElementById('erm_forecastTotal').textContent = f.toFixed(1).replace(/\.0$/,'') + 'h';
+}
+function saveEditRecord() {
+  if (!editingRecord) return;
+  const { user_id, week_actual } = editingRecord;
+  const aEntries = [...document.querySelectorAll('#erm_actualRows input[data-prefix="ea"]')].map(i => ({ project_id: i.dataset.project, hours: parseFloat(i.value) || 0 }));
+  const fEntries = [...document.querySelectorAll('#erm_forecastRows input[data-prefix="ef"]')].map(i => ({ project_id: i.dataset.project, hours: parseFloat(i.value) || 0 }));
+  const now = new Date().toISOString();
+  upsertRecord(user_id, week_actual, 'actual', aEntries, now);
+  upsertRecord(user_id, week_actual, 'forecast', fEntries, now);
+  saveRecords();
+  closeModal('editRecordModal');
+  renderActiveSection();
+  flashNotice('Submission updated.');
+}
+
+// =========================================================
+// DASHBOARD (PL)
+// =========================================================
+let chartByProjectInstance = null;
+let chartWeekTrendInstance = null;
+let chartPersonLoadInstance = null;
+
+function lastNMondays(n) {
+  const thisMon = mondayOf(new Date());
+  const arr = [];
+  for (let i = n - 1; i >= 0; i--) arr.push(ymd(addDays(thisMon, -7 * i)));
+  return arr;
+}
+
+function renderDashboard() {
+  const n = parseInt(document.getElementById('dashRange').value, 10);
+  const weeks = lastNMondays(n);
+  const weekSet = new Set(weeks);
+
+  const recs = state.records.filter(r => weekSet.has(r.week_start));
+  const actualRecs = recs.filter(r => r.type === 'actual');
+  const forecastRecs = recs.filter(r => r.type === 'forecast');
+
+  const totalActual = sumEntries(actualRecs);
+  const totalForecast = sumEntries(forecastRecs);
+  const peopleSubmitted = new Set(recs.map(r => r.user_id)).size;
+  const totalAnalysts = state.users.length;
+
+  // Forecast accuracy: same-week comparison across matched (user, week) pairs only
+  const pairs = matchedUserWeekPairs(weeks);
+  let matchedActual = 0, matchedForecast = 0;
+  pairs.forEach(({ aRec, fRec }) => {
+    matchedActual += aRec.entries.reduce((s, e) => s + e.hours, 0);
+    matchedForecast += fRec.entries.reduce((s, e) => s + e.hours, 0);
+  });
+  const accuracy = (matchedForecast > 0 && matchedActual > 0) ? (1 - Math.abs(matchedActual - matchedForecast) / matchedForecast) * 100 : null;
+
+  document.getElementById('dashStats').innerHTML = `
+    <div><div class="gc-cp-stat-label">Total actual hours</div><div class="gc-cp-stat-value lime">${fmtHours(totalActual)}</div></div>
+    <div><div class="gc-cp-stat-label">Total forecast hours</div><div class="gc-cp-stat-value wh">${fmtHours(totalForecast)}</div></div>
+    <div><div class="gc-cp-stat-label">Forecast accuracy</div><div class="gc-cp-stat-value ${accuracy==null?'wh':accuracy>=80?'lime':accuracy>=60?'amber':'red'}">${accuracy==null?'—':accuracy.toFixed(0)+'%'}</div></div>
+    <div><div class="gc-cp-stat-label">People submitted</div><div class="gc-cp-stat-value wh">${peopleSubmitted}/${totalAnalysts}</div></div>
+  `;
+
+  const byProject = aggregateByProject(actualRecs);
+  drawDoughnut('chartByProject', byProject.map(x => x.name), byProject.map(x => x.hours));
+
+  const weekTotals = weeks.map(w => ({
+    week: w,
+    actual: sumEntries(actualRecs.filter(r => r.week_start === w)),
+    forecast: sumEntries(forecastRecs.filter(r => r.week_start === w)),
+  }));
+  drawWeekTrend('chartWeekTrend', weekTotals);
+
+  const tbl = document.getElementById('projectBreakdownTable');
+  const projectAgg = {};
+  for (const p of sortedProjects(state.projects)) projectAgg[p.id] = { name: p.name, code: p.code, type: p.type || 'Project', actual: 0, forecast: 0 };
+  actualRecs.forEach(r => r.entries.forEach(e => { if (projectAgg[e.project_id]) projectAgg[e.project_id].actual += e.hours; }));
+  forecastRecs.forEach(r => r.entries.forEach(e => { if (projectAgg[e.project_id]) projectAgg[e.project_id].forecast += e.hours; }));
+  const arr = Object.values(projectAgg).filter(x => x.actual > 0 || x.forecast > 0);
+  const tot = arr.reduce((s, x) => s + x.actual, 0);
+  const rows = arr.map(x => {
+    const variance = x.forecast > 0 ? ((x.actual - x.forecast) / x.forecast) * 100 : null;
+    const share = tot > 0 ? (x.actual / tot * 100) : 0;
+    return `<tr>
+      <td>${projectTypeBadge(x.type)}</td>
+      <td class="m">${escapeHtml(x.name)} ${x.code?`<span style="color:var(--gc-gray-60);font-size:11px;">${escapeHtml(x.code)}</span>`:''}</td>
+      <td class="r m">${fmtHours(x.actual)}</td>
+      <td class="r">${fmtHours(x.forecast)}</td>
+      <td class="r">${variance==null?'—':(variance>=0?'+':'')+variance.toFixed(0)+'%'}</td>
+      <td class="r">${share.toFixed(0)}%</td>
+    </tr>`;
+  }).join('');
+  tbl.innerHTML = `
+    <thead><tr>
+      <th>Type</th>
+      <th>Name</th>
+      <th class="r">Actual</th>
+      <th class="r">Forecast</th>
+      <th class="r">Var %</th>
+      <th class="r">Share</th>
+    </tr></thead>
+    <tbody>${rows || '<tr><td colspan="6" class="gc-empty">No data in the selected range.</td></tr>'}</tbody>
+  `;
+}
+
+function sumEntries(recs) {
+  return recs.reduce((s, r) => s + r.entries.reduce((ss, e) => ss + e.hours, 0), 0);
+}
+
+function aggregateByProject(recs) {
+  const map = {};
+  recs.forEach(r => r.entries.forEach(e => {
+    if (!map[e.project_id]) map[e.project_id] = 0;
+    map[e.project_id] += e.hours;
+  }));
+  return Object.entries(map).map(([pid, h]) => {
+    const p = state.projects.find(x => x.id === pid);
+    return { name: p ? p.name : '(deleted)', hours: h, order: p ? p.order : 9999 };
+  }).sort((a,b) => (a.order||0) - (b.order||0));
+}
+
+const CHART_COLORS = ['#003EFF','#C4F222','#FF6400','#6288FF','#27AE60','#9C27B0','#F39C12','#1ABC9C','#E74C3C','#9EC31B','#00269D','#34495E'];
+
+function drawDoughnut(canvasId, labels, data) {
+  if (chartByProjectInstance) { chartByProjectInstance.destroy(); chartByProjectInstance = null; }
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  if (data.length === 0) { ctx.getContext('2d').clearRect(0,0,ctx.width,ctx.height); return; }
+  chartByProjectInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: labels.map((_,i)=>CHART_COLORS[i%CHART_COLORS.length]), borderColor:'#fff', borderWidth:2 }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'right', labels:{ font:{ family:'Montserrat', size:11 } } } } }
+  });
+}
+
+function drawWeekTrend(canvasId, weekTotals) {
+  if (chartWeekTrendInstance) { chartWeekTrendInstance.destroy(); chartWeekTrendInstance = null; }
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  const labels = weekTotals.map(w => fmtWeekShort(w.week));
+  chartWeekTrendInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Actual', data: weekTotals.map(w => w.actual), borderColor:'#003EFF', backgroundColor:'rgba(0,62,255,0.1)', tension:0.3, fill:true },
+        { label: 'Forecast', data: weekTotals.map(w => w.forecast), borderColor:'#9EC31B', backgroundColor:'rgba(196,242,34,0.15)', tension:0.3, fill:false, borderDash:[4,4] }
+      ]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ font:{ family:'Montserrat', size:11 } } } }, scales:{ y:{ beginAtZero:true } } }
+  });
+}
+
+// =========================================================
+// BY PERSON (PL)
+// =========================================================
+function renderPeopleMatrix() {
+  const weeks = lastNMondays(8);
+  const tbl = document.getElementById('peopleMatrixTable');
+  const users = [...state.users].sort((a,b)=>a.name.localeCompare(b.name));
+  const recs = state.records;
+
+  let headerCells = '<th>Person</th><th>Role</th>';
+  weeks.forEach(w => { headerCells += `<th class="c">${fmtWeekShort(w)}<div style="font-size:9px;color:var(--gc-gray-60);font-weight:500;">W${isoWeekNumber(parseYmd(w))}</div></th>`; });
+  headerCells += '<th class="r">Total Actual</th>';
+
+  const rows = users.map(u => {
+    let totA = 0;
+    const cells = weeks.map(w => {
+      const a = recs.find(r => r.user_id === u.id && r.week_start === w && r.type === 'actual');
+      const f = recs.find(r => r.user_id === u.id && r.week_start === w && r.type === 'forecast');
+      const aH = a ? a.entries.reduce((s,e)=>s+e.hours, 0) : null;
+      const fH = f ? f.entries.reduce((s,e)=>s+e.hours, 0) : null;
+      if (aH != null) totA += aH;
+      let cls = 'gc-badge-gray', txt = '—';
+      if (a && f) { cls = 'gc-badge-green'; txt = fmtHours(aH); }
+      else if (a) { cls = 'gc-badge-amber'; txt = fmtHours(aH); }
+      else if (f) { cls = 'gc-badge-blue'; txt = 'F:' + fmtHours(fH); }
+      const title = `Actual: ${aH==null?'—':fmtHours(aH)}  •  Forecast: ${fH==null?'—':fmtHours(fH)}`;
+      return `<td class="c"><span class="gc-badge ${cls}" title="${title}">${txt}</span></td>`;
+    }).join('');
+    return `<tr>
+      <td class="m">${escapeHtml(u.name)}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
+      <td><span class="gc-badge ${u.role==='PL'?'gc-badge-blue':'gc-badge-gray'}">${u.role}</span></td>
+      ${cells}
+      <td class="r m">${fmtHours(totA)}</td>
+    </tr>`;
+  }).join('');
+
+  tbl.innerHTML = `<thead><tr>${headerCells}</tr></thead><tbody>${rows || '<tr><td colspan="11" class="gc-empty">No users.</td></tr>'}</tbody>`;
+
+  const weeks4 = lastNMondays(4);
+  const weeks4Set = new Set(weeks4);
+  const loadMap = {};
+  state.records.filter(r => r.type==='actual' && weeks4Set.has(r.week_start)).forEach(r => {
+    if (!loadMap[r.user_id]) loadMap[r.user_id] = 0;
+    loadMap[r.user_id] += r.entries.reduce((s,e)=>s+e.hours,0);
+  });
+  const labels = users.map(u => u.name);
+  const data = users.map(u => loadMap[u.id] || 0);
+  if (chartPersonLoadInstance) { chartPersonLoadInstance.destroy(); chartPersonLoadInstance = null; }
+  const ctx = document.getElementById('chartPersonLoad');
+  if (ctx) {
+    const target = Number(state.settings.hours_per_week_target) || 40;
+    chartPersonLoadInstance = new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets: [{
+        label: 'Actual hours (last 4 weeks)',
+        data,
+        backgroundColor: data.map(v => v > target * 4 * 1.15 ? '#E74C3C' : v < target * 4 * 0.6 ? '#F39C12' : '#003EFF'),
+      }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Hours' } } } }
+    });
+  }
+}
+
+// =========================================================
+// VARIANCE (PL)
+// =========================================================
+function matchedUserWeekPairs(weeks) {
+  const pairs = [];
+  weeks.forEach(w => {
+    state.users.forEach(u => {
+      const aRec = state.records.find(r => r.user_id === u.id && r.week_start === w && r.type === 'actual');
+      const fRec = state.records.find(r => r.user_id === u.id && r.week_start === w && r.type === 'forecast');
+      if (aRec && fRec) pairs.push({ user_id: u.id, week_start: w, aRec, fRec });
+    });
+  });
+  return pairs;
+}
+
+function renderVariance() {
+  const groupBy = document.getElementById('varianceGroupBy').value;
+  const n = parseInt(document.getElementById('varianceRange').value, 10);
+  const weeks = lastNMondays(n);
+
+  const pairs = matchedUserWeekPairs(weeks);
+
+  const buckets = {};
+  if (groupBy === 'person') {
+    pairs.forEach(({ user_id, week_start, aRec, fRec }) => {
+      const u = state.users.find(x => x.id === user_id);
+      if (!u) return;
+      if (!buckets[u.id]) buckets[u.id] = { name: u.name, actual: 0, forecast: 0, weeks: new Set() };
+      buckets[u.id].actual += aRec.entries.reduce((s, e) => s + e.hours, 0);
+      buckets[u.id].forecast += fRec.entries.reduce((s, e) => s + e.hours, 0);
+      buckets[u.id].weeks.add(week_start);
+    });
+  } else {
+    pairs.forEach(({ week_start, aRec, fRec }) => {
+      aRec.entries.forEach(e => {
+        const p = state.projects.find(x => x.id === e.project_id);
+        if (!p) return;
+        if (!buckets[p.id]) buckets[p.id] = { name: p.name, actual: 0, forecast: 0, type: p.type || 'Project', order: p.order || 0, weeks: new Set() };
+        buckets[p.id].actual += e.hours;
+        buckets[p.id].weeks.add(week_start);
+      });
+      fRec.entries.forEach(e => {
+        const p = state.projects.find(x => x.id === e.project_id);
+        if (!p) return;
+        if (!buckets[p.id]) buckets[p.id] = { name: p.name, actual: 0, forecast: 0, type: p.type || 'Project', order: p.order || 0, weeks: new Set() };
+        buckets[p.id].forecast += e.hours;
+        buckets[p.id].weeks.add(week_start);
+      });
+    });
+  }
+  Object.values(buckets).forEach(b => { b.weeks = b.weeks.size; });
+
+  const arr = Object.values(buckets);
+  if (groupBy === 'project') arr.sort((a, b) => (a.order || 0) - (b.order || 0));
+  else arr.sort((a, b) => b.actual - a.actual);
+
+  const rows = arr.map(x => {
+    const delta = x.actual - x.forecast;
+    const pct = x.forecast > 0 ? (delta / x.forecast) * 100 : null;
+    const accuracy = (x.forecast > 0 && x.actual > 0) ? Math.max(0, 100 - Math.abs(pct)) : null;
+    let deltaCls = '';
+    if (pct != null) deltaCls = Math.abs(pct) <= 10 ? 'gc-badge-green' : Math.abs(pct) <= 25 ? 'gc-badge-amber' : 'gc-badge-red';
+    const typeCol = groupBy === 'project' ? `<td>${projectTypeBadge(x.type)}</td>` : '';
+    return `<tr>
+      ${typeCol}
+      <td class="m">${escapeHtml(x.name)}</td>
+      <td class="c"><span class="gc-pill">${x.weeks}</span></td>
+      <td class="r m">${fmtHours(x.actual)}</td>
+      <td class="r">${fmtHours(x.forecast)}</td>
+      <td class="r">${delta>=0?'+':''}${fmtHours(delta)}</td>
+      <td class="r">${pct==null?'—':`<span class="gc-badge ${deltaCls}">${(pct>=0?'+':'')}${pct.toFixed(0)}%</span>`}</td>
+      <td class="r">${accuracy==null?'—':accuracy.toFixed(0)+'%'}</td>
+    </tr>`;
+  }).join('');
+
+  const typeHeader = groupBy === 'project' ? '<th>Type</th>' : '';
+  const colspan = groupBy === 'project' ? 8 : 7;
+  document.getElementById('varianceTable').innerHTML = `
+    <thead><tr>
+      ${typeHeader}
+      <th>${groupBy==='person'?'Person':'Name'}</th>
+      <th class="c">Matched weeks</th>
+      <th class="r">Actual</th>
+      <th class="r">Forecast</th>
+      <th class="r">Delta</th>
+      <th class="r">Var %</th>
+      <th class="r">Accuracy</th>
+    </tr></thead>
+    <tbody>${rows || `<tr><td colspan="${colspan}" class="gc-empty">No matched (person, week) pairs in this range. The variance is only computed for weeks where both forecast and actual were submitted by the same person.</td></tr>`}</tbody>
+  `;
+}
+
+// =========================================================
+// PROJECTS (PL) — with drag-and-drop ordering
+// =========================================================
+function renderProjects() {
+  const tbl = document.getElementById('projectsTable');
+  // Show active items first (sorted by their order), then archived (sorted by name)
+  const active = sortedProjects(state.projects.filter(p => p.status === 'active'));
+  const archived = [...state.projects.filter(p => p.status === 'archived')].sort((a,b)=>a.name.localeCompare(b.name));
+  const all = [...active, ...archived];
+  const rows = all.map((p, idx) => {
+    const used = state.records.some(r => r.entries.some(e => e.project_id === p.id));
+    const draggable = p.status === 'active';
+    return `<tr ${draggable?`draggable="true" data-pid="${p.id}"`:''}>
+      <td class="c" style="width:30px;">${draggable?'<span class="drag-handle" title="Drag to reorder">⋮⋮</span>':''}</td>
+      <td>${projectTypeBadge(p.type || 'Project')}</td>
+      <td class="m">${escapeHtml(p.name)}</td>
+      <td>${p.code?`<span class="gc-badge gc-badge-gray">${escapeHtml(p.code)}</span>`:'—'}</td>
+      <td><span class="gc-badge ${p.status==='active'?'gc-badge-green':'gc-badge-gray'}">${p.status==='active'?'Active':'Archived'}</span></td>
+      <td>${fmtDate(p.created_at)}</td>
+      <td class="r">
+        <div class="gc-row-actions">
+          <button class="gc-icon-btn" title="Edit" onclick="openProjectModal('${p.id}')">✎</button>
+          ${used ? `<button class="gc-icon-btn" title="Toggle active/archived" onclick="toggleProjectStatus('${p.id}')">↻</button>` : `<button class="gc-icon-btn danger" title="Delete" onclick="deleteProject('${p.id}')">×</button>`}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  tbl.innerHTML = `
+    <thead><tr><th></th><th>Type</th><th>Name</th><th>Code</th><th>Status</th><th>Created</th><th class="r">Actions</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="7" class="gc-empty">No projects yet.</td></tr>'}</tbody>
+  `;
+  attachProjectDnD();
+}
+
+function attachProjectDnD() {
+  const rows = document.querySelectorAll('#projectsTable tbody tr[draggable="true"]');
+  rows.forEach(row => {
+    row.addEventListener('dragstart', onProjectDragStart);
+    row.addEventListener('dragend', onProjectDragEnd);
+    row.addEventListener('dragover', onProjectDragOver);
+    row.addEventListener('dragleave', onProjectDragLeave);
+    row.addEventListener('drop', onProjectDrop);
+  });
+}
+function onProjectDragStart(e) {
+  dragSrcId = e.currentTarget.dataset.pid;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', dragSrcId); } catch(_) {}
+}
+function onProjectDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('#projectsTable tbody tr.drag-over').forEach(t => t.classList.remove('drag-over'));
+  dragSrcId = null;
+}
+function onProjectDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const tr = e.currentTarget;
+  if (tr.dataset.pid === dragSrcId) return;
+  document.querySelectorAll('#projectsTable tbody tr.drag-over').forEach(t => { if (t !== tr) t.classList.remove('drag-over'); });
+  tr.classList.add('drag-over');
+}
+function onProjectDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+function onProjectDrop(e) {
+  e.preventDefault();
+  const targetRow = e.currentTarget;
+  const targetId = targetRow.dataset.pid;
+  targetRow.classList.remove('drag-over');
+  if (!dragSrcId || targetId === dragSrcId) return;
+  reorderProjects(dragSrcId, targetId);
+}
+function reorderProjects(srcId, targetId) {
+  const active = sortedProjects(state.projects.filter(p => p.status === 'active'));
+  const srcIdx = active.findIndex(p => p.id === srcId);
+  const tgtIdx = active.findIndex(p => p.id === targetId);
+  if (srcIdx < 0 || tgtIdx < 0) return;
+  const [moved] = active.splice(srcIdx, 1);
+  active.splice(tgtIdx, 0, moved);
+  active.forEach((p, i) => { p.order = i; });
+  // Archived items keep large order values to fall to bottom
+  const archived = state.projects.filter(p => p.status === 'archived');
+  let maxOrder = active.length - 1;
+  archived.forEach((p, i) => { p.order = maxOrder + 1 + i; });
+  saveProjects();
+  renderProjects();
+  flashNotice('Order updated.');
+}
+function openProjectModal(id) {
+  editingProjectId = id || null;
+  if (id) {
+    const p = state.projects.find(x => x.id === id);
+    document.getElementById('projectModalTitle').textContent = 'Edit item';
+    document.getElementById('pm_name').value = p.name;
+    document.getElementById('pm_code').value = p.code || '';
+    document.getElementById('pm_status').value = p.status;
+    document.getElementById('pm_type').value = p.type || 'Project';
+  } else {
+    document.getElementById('projectModalTitle').textContent = 'Add item';
+    document.getElementById('pm_name').value = '';
+    document.getElementById('pm_code').value = '';
+    document.getElementById('pm_status').value = 'active';
+    document.getElementById('pm_type').value = 'Project';
+  }
+  openModal('projectModal');
+}
+function saveProject() {
+  const name = document.getElementById('pm_name').value.trim();
+  const code = document.getElementById('pm_code').value.trim();
+  const status = document.getElementById('pm_status').value;
+  const type = document.getElementById('pm_type').value === 'Deal' ? 'Deal' : 'Project';
+  if (!name) { alert('Please enter a name.'); return; }
+  if (editingProjectId) {
+    const p = state.projects.find(x => x.id === editingProjectId);
+    p.name = name; p.code = code; p.status = status; p.type = type;
+    if (status === 'archived' && !p.archived_at) p.archived_at = new Date().toISOString();
+  } else {
+    state.projects.push({ id: uid(), name, code, type, status, order: nextProjectOrder(), created_at: new Date().toISOString() });
+  }
+  saveProjects();
+  closeModal('projectModal');
+  renderActiveSection();
+}
+function toggleProjectStatus(id) {
+  const p = state.projects.find(x => x.id === id);
+  p.status = p.status === 'active' ? 'archived' : 'active';
+  if (p.status === 'archived') p.archived_at = new Date().toISOString();
+  saveProjects();
+  renderProjects();
+}
+function deleteProject(id) {
+  if (!confirm("Permanently delete this item? This action cannot be undone (consider archiving instead).")) return;
+  state.projects = state.projects.filter(x => x.id !== id);
+  saveProjects();
+  renderProjects();
+}
+
+// =========================================================
+// SETTINGS (PL): users, params, backup
+// =========================================================
+function renderSettings() {
+  const me = currentUser();
+  const users = [...state.users].sort((a,b)=>a.name.localeCompare(b.name));
+  const rows = users.map(u => {
+    const isMe = u.id === me.id;
+    return `<tr>
+      <td class="m">${escapeHtml(u.name)} ${isMe?'<span style="font-size:11px;color:var(--gc-gray-60);">(you)</span>':''}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
+      <td>
+        <select class="gc-select small" style="font-size:12px;padding:4px 8px;" ${isMe?'disabled':''} onchange="changeUserRole('${u.id}', this.value)">
+          <option value="Analyst" ${u.role==='Analyst'?'selected':''}>Analyst</option>
+          <option value="PL" ${u.role==='PL'?'selected':''}>PL</option>
+        </select>
+      </td>
+      <td>${fmtDate(u.created_at)}</td>
+      <td class="r"><div class="gc-row-actions">
+        <button class="gc-icon-btn" title="Reset password" onclick="resetUserPassword('${u.id}')">🔑</button>
+        ${isMe ? '' : `<button class="gc-icon-btn danger" title="Delete user" onclick="deleteUser('${u.id}')">×</button>`}
+      </div></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('usersTable').innerHTML = `
+    <thead><tr><th>User</th><th>Role</th><th>Created</th><th class="r">Actions</th></tr></thead>
+    <tbody>${rows}</tbody>
+  `;
+  hydrateSettingsInputs();
+}
+function hydrateSettingsInputs() {
+  const w = document.getElementById('settingsEditWindow');
+  const h = document.getElementById('settingsHoursTarget');
+  if (w) w.value = state.settings.edit_window_days;
+  if (h) h.value = state.settings.hours_per_week_target;
+}
+function saveSettings() {
+  state.settings.edit_window_days = Math.max(0, parseInt(document.getElementById('settingsEditWindow').value, 10) || 0);
+  state.settings.hours_per_week_target = Math.max(0, parseInt(document.getElementById('settingsHoursTarget').value, 10) || 0);
+  saveSettingsState();
+  flashNotice('Settings saved.');
+}
+async function changeUserRole(id, role) {
+  const u = state.users.find(x => x.id === id);
+  if (!u) return;
+  const { error } = await sb.from('profiles').update({ role }).eq('id', id);
+  if (error) { alert('Could not update role: ' + error.message); return; }
+  u.role = role;
+}
+async function resetUserPassword(id) {
+  const u = state.users.find(x => x.id === id);
+  if (!u) return;
+  const { error } = await sb.auth.resetPasswordForEmail(u.email);
+  if (error) { alert('Error: ' + error.message); return; }
+  alert(`Password reset email sent to ${u.email}. Ask ${u.name} to follow the link in their inbox.`);
+}
+async function deleteUser(id) {
+  const u = state.users.find(x => x.id === id);
+  if (!u) return;
+  if (!confirm(`Remove ${u.name} from the team? Their submissions are kept. They will lose access immediately.`)) return;
+  const { error } = await sb.from('profiles').delete().eq('id', id);
+  if (error) { alert('Could not remove user: ' + error.message); return; }
+  state.users = state.users.filter(x => x.id !== id);
+  renderSettings();
+  flashNotice('User removed.');
+}
+function openInviteModal() {
+  document.getElementById('im_name').value = '';
+  document.getElementById('im_email').value = '';
+  document.getElementById('im_password').value = '';
+  document.getElementById('im_role').value = 'Analyst';
+  openModal('inviteModal');
+}
+async function saveInvite() {
+  const name  = document.getElementById('im_name').value.trim();
+  const email = document.getElementById('im_email').value.trim().toLowerCase();
+  const pw    = document.getElementById('im_password').value;
+  const role  = document.getElementById('im_role').value;
+  if (!name || !email || pw.length < 6) { alert('Please fill all fields (password ≥ 6 characters).'); return; }
+  // signUp with email confirmation enabled does NOT sign out the current PL
+  const { data, error } = await sb.auth.signUp({ email, password: pw, options: { data: { name } } });
+  if (error) { alert('Could not create account: ' + error.message); return; }
+  // Update role if not the default Analyst
+  if (role !== 'Analyst' && data.user) {
+    await sb.from('profiles').update({ role }).eq('id', data.user.id);
+  }
+  // Refresh the profiles list
+  const { data: profiles } = await sb.from('profiles').select('*');
+  state.users = profiles || [];
+  closeModal('inviteModal');
+  renderSettings();
+  flashNotice('User created.');
+}
+
+// =========================================================
+// EXPORT
+// =========================================================
+function exportProjectBreakdown() {
+  const n = parseInt(document.getElementById('dashRange').value, 10);
+  const weeks = lastNMondays(n);
+  const weekSet = new Set(weeks);
+  const actualRecs = state.records.filter(r => r.type === 'actual' && weekSet.has(r.week_start));
+  const forecastRecs = state.records.filter(r => r.type === 'forecast' && weekSet.has(r.week_start));
+  const data = [['Type','Name','Code','Actual (h)','Forecast (h)','Variance (h)','Variance %']];
+  const map = {};
+  for (const p of sortedProjects(state.projects)) map[p.id] = { name:p.name, code:p.code||'', type:p.type||'Project', actual:0, forecast:0 };
+  actualRecs.forEach(r => r.entries.forEach(e => { if (map[e.project_id]) map[e.project_id].actual += e.hours; }));
+  forecastRecs.forEach(r => r.entries.forEach(e => { if (map[e.project_id]) map[e.project_id].forecast += e.hours; }));
+  Object.values(map).filter(x => x.actual>0||x.forecast>0).forEach(x => {
+    const delta = x.actual - x.forecast;
+    const pct = x.forecast > 0 ? (delta/x.forecast)*100 : '';
+    data.push([x.type, x.name, x.code, x.actual, x.forecast, delta, pct]);
+  });
+  downloadXlsx(`workload_breakdown_${weeks[0]}.xlsx`, 'Breakdown', data);
+}
+function exportPeopleMatrix() {
+  const weeks = lastNMondays(13);
+  const header = ['Person','Email','Role', ...weeks.flatMap(w => [`${fmtWeekShort(w)} A`, `${fmtWeekShort(w)} F`])];
+  const data = [header];
+  [...state.users].sort((a,b)=>a.name.localeCompare(b.name)).forEach(u => {
+    const row = [u.name, u.email, u.role];
+    weeks.forEach(w => {
+      const a = state.records.find(r => r.user_id===u.id && r.week_start===w && r.type==='actual');
+      const f = state.records.find(r => r.user_id===u.id && r.week_start===w && r.type==='forecast');
+      row.push(a ? a.entries.reduce((s,e)=>s+e.hours,0) : '');
+      row.push(f ? f.entries.reduce((s,e)=>s+e.hours,0) : '');
+    });
+    data.push(row);
+  });
+  downloadXlsx(`workload_people_${weeks[0]}.xlsx`, 'People', data);
+}
+function exportVariance() {
+  const groupBy = document.getElementById('varianceGroupBy').value;
+  const n = parseInt(document.getElementById('varianceRange').value, 10);
+  const includeType = groupBy === 'project';
+  const data = [[...(includeType?['Type']:[]), groupBy==='person'?'Person':'Name', 'Matched weeks', 'Actual (h)', 'Forecast (h)', 'Delta (h)', 'Variance %', 'Accuracy %']];
+  const weeks = lastNMondays(n);
+  const pairs = matchedUserWeekPairs(weeks);
+  const buckets = {};
+  if (groupBy === 'person') {
+    pairs.forEach(({ user_id, week_start, aRec, fRec }) => {
+      const u = state.users.find(x => x.id === user_id); if (!u) return;
+      if (!buckets[u.id]) buckets[u.id] = { name: u.name, actual: 0, forecast: 0, weeks: new Set() };
+      buckets[u.id].actual += aRec.entries.reduce((s, e) => s + e.hours, 0);
+      buckets[u.id].forecast += fRec.entries.reduce((s, e) => s + e.hours, 0);
+      buckets[u.id].weeks.add(week_start);
+    });
+  } else {
+    pairs.forEach(({ week_start, aRec, fRec }) => {
+      aRec.entries.forEach(e => {
+        const p = state.projects.find(x => x.id === e.project_id); if (!p) return;
+        if (!buckets[p.id]) buckets[p.id] = { name: p.name, actual: 0, forecast: 0, type: p.type||'Project', order: p.order||0, weeks: new Set() };
+        buckets[p.id].actual += e.hours;
+        buckets[p.id].weeks.add(week_start);
+      });
+      fRec.entries.forEach(e => {
+        const p = state.projects.find(x => x.id === e.project_id); if (!p) return;
+        if (!buckets[p.id]) buckets[p.id] = { name: p.name, actual: 0, forecast: 0, type: p.type||'Project', order: p.order||0, weeks: new Set() };
+        buckets[p.id].forecast += e.hours;
+        buckets[p.id].weeks.add(week_start);
+      });
+    });
+  }
+  Object.values(buckets).forEach(b => { b.weeks = b.weeks.size; });
+  const arr = Object.values(buckets);
+  if (groupBy === 'project') arr.sort((a, b) => (a.order || 0) - (b.order || 0));
+  else arr.sort((a, b) => b.actual - a.actual);
+  arr.forEach(x => {
+    const delta = x.actual - x.forecast;
+    const pct = x.forecast > 0 ? (delta / x.forecast) * 100 : '';
+    const acc = (x.forecast > 0 && x.actual > 0) ? Math.max(0, 100 - Math.abs((delta / x.forecast) * 100)) : '';
+    data.push([...(includeType?[x.type]:[]), x.name, x.weeks, x.actual, x.forecast, delta, pct, acc]);
+  });
+  downloadXlsx(`workload_variance_${weeks[0]}.xlsx`, 'Variance', data);
+}
+function downloadXlsx(filename, sheetName, data) {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, filename);
+}
+
+function exportAllJSON() {
+  const blob = new Blob([JSON.stringify({ users: state.users, projects: state.projects, records: state.records, settings: state.settings }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `workload_backup_${ymd(new Date())}.json`;
+  a.click();
+}
+function importAllJSON(ev) {
+  const f = ev.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = async e => {
+    try {
+      const obj = JSON.parse(e.target.result);
+      if (!confirm('Import this backup to Supabase? Projects, records and settings will be overwritten. Users are not imported (managed via Supabase Auth).')) return;
+      if (obj.projects) {
+        obj.projects.forEach((p, i) => { if (!p.type) p.type = 'Project'; if (typeof p.order !== 'number') p.order = i; });
+        const rows = obj.projects.map(({ order, ...p }) => ({ ...p, ord: order }));
+        await sb.from('projects').upsert(rows);
+        state.projects = obj.projects;
+      }
+      if (obj.records) {
+        await sb.from('records').upsert(obj.records);
+        state.records = obj.records;
+      }
+      if (obj.settings) {
+        state.settings = Object.assign({}, DEFAULT_SETTINGS, obj.settings);
+        await sb.from('settings').upsert({ id: 1, ...state.settings });
+      }
+      flashNotice('Backup imported.');
+      enterApp();
+    } catch (err) { alert('Invalid JSON file: ' + err.message); }
+  };
+  r.readAsText(f);
+  ev.target.value = '';
+}
+async function clearAllData() {
+  if (!confirm('Wipe ALL projects, submissions and settings from Supabase? This cannot be undone. You will be signed out.')) return;
+  await Promise.all([
+    sb.from('records').delete().not('id', 'is', null),
+    sb.from('projects').delete().not('id', 'is', null),
+    sb.from('settings').upsert({ id: 1, edit_window_days: 14, hours_per_week_target: 40 }),
+  ]);
+  await sb.auth.signOut();
+  location.reload();
+}
+
+// =========================================================
+// HELPERS
+// =========================================================
+function escapeHtml(s) { return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])); }
+function fmtHours(h) { if (h == null || h === '') return '—'; const v = Number(h); if (isNaN(v)) return '—'; return v.toFixed(1).replace(/\.0$/,'') + 'h'; }
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// =========================================================
+// BOOT
+// =========================================================
+document.addEventListener('DOMContentLoaded', () => {
+  // onAuthStateChange fires immediately with INITIAL_SESSION
+  sb.auth.onAuthStateChange(async (event, sbSession) => {
+    if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+      if (sbSession) {
+        const ok = await loadAllFromSupabase();
+        if (ok) enterApp();
+        else showLogin();
+      } else {
+        showLogin();
+      }
+    } else if (event === 'SIGNED_OUT') {
+      state = { users: [], projects: [], records: [], settings: { ...DEFAULT_SETTINGS }, currentUser: null };
+      showLogin();
+    }
+  });
+});
+
+document.addEventListener('click', e => {
+  if (e.target.classList && e.target.classList.contains('gc-modal-overlay')) {
+    e.target.classList.remove('open');
+  }
+});
+</script>
+</body>
+</html>
