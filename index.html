@@ -811,7 +811,7 @@ function showSignup() {
   document.getElementById('loginForm').classList.add('hide');
   document.getElementById('signupForm').classList.remove('hide');
   document.getElementById('signupError').style.display = 'none';
-  document.getElementById('signupSub').textContent = 'Sign up with your company email (default role: Analyst).';
+  document.getElementById('signupSub').textContent = 'Sign up with your company email. You’ll join as an Analyst — a PL can upgrade your role later.';
 }
 function showAuthError(id, msg) {
   const el = document.getElementById(id);
@@ -1755,9 +1755,20 @@ function saveSettings() {
 async function changeUserRole(id, role) {
   const u = state.users.find(x => x.id === id);
   if (!u) return;
+  const prev = u.role;
+  if (role === prev) return;
+  const verb = role === 'PL' ? `Promote ${u.name} to PL?\n\nPLs can manage projects, edit anyone's records, change settings, and add/remove users.`
+                             : `Downgrade ${u.name} to Analyst?\n\nThey will lose access to the dashboards, projects and team management.`;
+  if (!confirm(verb)) { renderSettings(); return; }
   const { error } = await sb.from('profiles').update({ role }).eq('id', id);
-  if (error) { alert('Could not update role: ' + error.message); return; }
+  if (error) {
+    alert('Could not update role: ' + error.message);
+    renderSettings(); // revert the dropdown to the real value
+    return;
+  }
   u.role = role;
+  renderSettings();
+  flashNotice(`${u.name} is now ${role}.`);
 }
 async function resetUserPassword(id) {
   const u = state.users.find(x => x.id === id);
