@@ -158,3 +158,115 @@ drop trigger if exists on_profile_role_change on public.profiles;
 create trigger on_profile_role_change
   before update on public.profiles
   for each row execute function public.guard_role_change();
+
+-- =============================================================
+-- MIGRATION 2 — Company-domain sign-up + access approval
+-- (additive & idempotent — safe to run on the live database)
+--
+--  • Sign-up is limited to @growthcapital.vc email addresses.
+--  • New users start as 'pending' and cannot read ANY data until
+--    a PL (Team Lead) approves them. The first-ever user is
+--    auto-approved so the org is never locked out.
+--  • Only a PL can approve/reject (change status) or change roles.
+-- =============================================================
+
+-- 1) Approval status on every profile.
+alter table public.profiles
+  add column if not exists status text not null default 'pending'
+    check (status in ('pending', 'approved', 'rejected'));
+
+-- Everyone who already exists predates this feature → grandfather them in.
+update public.profiles set status = 'approved' where status <> 'approved';
+
+-- 2) Helper: is the calling user approved?
+create or replace function public.is_approved()
+returns boolean language sql security definer stable as $$
+  select exists (
+    select 1 from public.profiles
+    where id = auth.uid() and status = 'approved'
+  )
+$$;
+
+-- 3) Sign-up trigger: enforce company domain + set role/status.
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer as $$
+declare
+  is_first boolean;
+begin
+  if lower(split_part(new.email, '@', 2)) <> 'growthcapital.vc' then
+    raise exception 'Registration is restricted to @growthcapital.vc email addresses.';
+  end if;
+  select not exists (select 1 from public.profiles limit 1) into is_first;
+  insert into public.profiles (id, email, name, role, status)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    case when is_first then 'PL' else 'Analyst' end,
+    case when is_first then 'approved' else 'pending' end
+  );
+  return new;
+end;
+$$;
+
+-- 4) Guard: only a PL may change a role OR an approval status,
+--    and the last remaining PL can never be demoted.
+drop trigger if exists on_profile_role_change on public.profiles;
+drop function if exists public.guard_role_change();
+
+create or replace function public.guard_profile_change()
+returns trigger language plpgsql security definer as $$
+begin
+  if new.role is distinct from old.role then
+    if not public.is_pl() then
+      raise exception 'Only a PL can change a user role.';
+    end if;
+    if old.role = 'PL' and new.role <> 'PL'
+       and (select count(*) from public.profiles where role = 'PL') <= 1 then
+      raise exception 'Cannot demote the last remaining PL.';
+    end if;
+  end if;
+  if new.status is distinct from old.status and not public.is_pl() then
+    raise exception 'Only a PL can approve or reject a user.';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_profile_change on public.profiles;
+create trigger on_profile_change
+  before update on public.profiles
+  for each row execute function public.guard_profile_change();
+
+-- 5) Lock data behind approval. Unapproved users can read only
+--    their own profile row (to see their status) — nothing else.
+drop policy if exists "read_all_profiles" on public.profiles;
+create policy "read_all_profiles"
+  on public.profiles for select to authenticated
+  using (public.is_approved() or id = auth.uid());
+
+drop policy if exists "read_projects" on public.projects;
+create policy "read_projects"
+  on public.projects for select to authenticated
+  using (public.is_approved());
+
+drop policy if exists "read_records" on public.records;
+create policy "read_records"
+  on public.records for select to authenticated
+  using (public.is_approved());
+
+drop policy if exists "read_settings" on public.settings;
+create policy "read_settings"
+  on public.settings for select to authenticated
+  using (public.is_approved());
+
+-- Unapproved users may not write records either.
+drop policy if exists "insert_records" on public.records;
+create policy "insert_records"
+  on public.records for insert to authenticated
+  with check (public.is_approved() and (user_id = auth.uid() or public.is_pl()));
+
+drop policy if exists "update_records" on public.records;
+create policy "update_records"
+  on public.records for update to authenticated
+  using (public.is_approved() and (user_id = auth.uid() or public.is_pl()));

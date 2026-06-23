@@ -260,7 +260,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
       <form class="auth-form" onsubmit="event.preventDefault(); doLogin();">
         <div class="gc-form-group">
           <label>Email</label>
-          <input type="email" class="gc-input" id="loginEmail" required autocomplete="username" placeholder="name@growth-capital.it">
+          <input type="email" class="gc-input" id="loginEmail" required autocomplete="username" placeholder="name@growthcapital.vc">
         </div>
         <div class="gc-form-group">
           <label>Password</label>
@@ -283,7 +283,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         </div>
         <div class="gc-form-group">
           <label>Company email</label>
-          <input type="email" class="gc-input" id="signupEmail" required placeholder="name@growth-capital.it">
+          <input type="email" class="gc-input" id="signupEmail" required placeholder="name@growthcapital.vc">
         </div>
         <div class="gc-form-group">
           <label>Password (min 6 characters)</label>
@@ -292,6 +292,16 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         <button class="gc-btn gc-btn-primary gc-btn-block" type="submit">Sign up</button>
       </form>
       <div class="auth-toggle">Already have an account? <a onclick="showLogin()">Sign in</a></div>
+    </div>
+
+    <!-- PENDING / REJECTED -->
+    <div id="pendingForm" class="hide">
+      <div class="auth-title" id="pendingTitle">Almost there</div>
+      <div class="auth-sub" id="pendingSub"></div>
+      <div style="display:flex; gap:10px; margin-top:18px;">
+        <button class="gc-btn gc-btn-primary gc-btn-block" onclick="location.reload()">Check again</button>
+        <button class="gc-btn gc-btn-secondary gc-btn-block" onclick="doLogout()">Sign out</button>
+      </div>
     </div>
   </div>
 </div>
@@ -509,6 +519,16 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
 
     <!-- ============ TEAM / SETTINGS (PL) ============ -->
     <section class="gc-section" id="sec-settings">
+      <div class="gc-card" id="pendingCard" style="display:none;">
+        <div class="gc-card-header">
+          <div>
+            <span class="gc-card-title">Pending access requests</span>
+            <div class="gc-card-sub">New sign-ups awaiting approval before they can access the app</div>
+          </div>
+        </div>
+        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="pendingTable"></table></div>
+      </div>
+
       <div class="gc-grid gc-grid-2">
         <div class="gc-card">
           <div class="gc-card-header">
@@ -705,7 +725,13 @@ async function loadAllFromSupabase() {
 
   // If profile doesn't exist (deleted user), sign out silently
   const { data: myProfile } = await sb.from('profiles').select('*').eq('id', user.id).single();
-  if (!myProfile) { await sb.auth.signOut(); return false; }
+  if (!myProfile) { await sb.auth.signOut(); return 'signedout'; }
+
+  // Access gate: unapproved users cannot load the app (and RLS blocks their data anyway).
+  if (myProfile.status && myProfile.status !== 'approved') {
+    state.currentUser = myProfile;
+    return myProfile.status; // 'pending' | 'rejected'
+  }
 
   const [{ data: profiles }, { data: projects }, { data: records }, { data: settingsRow }] = await Promise.all([
     sb.from('profiles').select('*'),
@@ -719,7 +745,7 @@ async function loadAllFromSupabase() {
   state.records  = (records  || []).map(r => ({ ...r, entries: Array.isArray(r.entries) ? r.entries : [] }));
   state.settings = Object.assign({}, DEFAULT_SETTINGS, settingsRow || {});
   state.currentUser = myProfile;
-  return true;
+  return 'ok';
 }
 
 // save functions — update state in-memory then sync to Supabase (fire-and-forget)
@@ -802,16 +828,32 @@ function isoWeekNumber(date) {
 // AUTH
 // =========================================================
 function showLogin() {
+  document.getElementById('authView').classList.remove('hide');
   document.getElementById('loginForm').classList.remove('hide');
   document.getElementById('signupForm').classList.add('hide');
+  document.getElementById('pendingForm').classList.add('hide');
   document.getElementById('loginError').style.display = 'none';
   document.getElementById('loginInfo').style.display = 'none';
 }
 function showSignup() {
   document.getElementById('loginForm').classList.add('hide');
   document.getElementById('signupForm').classList.remove('hide');
+  document.getElementById('pendingForm').classList.add('hide');
   document.getElementById('signupError').style.display = 'none';
-  document.getElementById('signupSub').textContent = 'Sign up with your company email. You’ll join as an Analyst — a PL can upgrade your role later.';
+  document.getElementById('signupSub').textContent = 'Use your @growthcapital.vc email. A Team Lead must approve your account before you can sign in.';
+}
+// Unapproved users land here instead of the app.
+function showPending(status) {
+  document.getElementById('authView').classList.remove('hide');
+  document.getElementById('appView').classList.add('hide');
+  document.getElementById('loginForm').classList.add('hide');
+  document.getElementById('signupForm').classList.add('hide');
+  document.getElementById('pendingForm').classList.remove('hide');
+  const rejected = status === 'rejected';
+  document.getElementById('pendingTitle').textContent = rejected ? 'Access not approved' : 'Almost there';
+  document.getElementById('pendingSub').textContent = rejected
+    ? 'Your registration was not approved. If you think this is a mistake, contact a Team Lead.'
+    : 'Your account was created and is waiting for a Team Lead to approve your access. You’ll get in as soon as they do.';
 }
 function showAuthError(id, msg) {
   const el = document.getElementById(id);
@@ -839,12 +881,14 @@ async function doSignup() {
   const pw    = document.getElementById('signupPassword').value;
   if (!name || !email || pw.length < 6)
     return showAuthError('signupError', 'Please fill all fields (password at least 6 characters).');
+  if (!/@growthcapital\.vc$/.test(email))
+    return showAuthError('signupError', 'Registration is restricted to @growthcapital.vc email addresses.');
   const { error } = await sb.auth.signUp({ email, password: pw, options: { data: { name } } });
   if (error) return showAuthError('signupError', error.message);
-  // If email confirmation is enabled in Supabase, the session is null until confirmed.
-  // Show the login form with an info message.
+  // If a session is created (email confirmation off), onAuthStateChange routes
+  // the user to the pending screen. Otherwise show the login info message.
   showLogin();
-  showAuthInfo('loginInfo', 'Account created! If email confirmation is enabled, check your inbox before signing in.');
+  showAuthInfo('loginInfo', 'Account created! A Team Lead must approve your account before you can sign in. (If email confirmation is enabled, confirm via the link in your inbox first.)');
 }
 async function doLogout() {
   await sb.auth.signOut();
@@ -1716,8 +1760,12 @@ function deleteProject(id) {
 // =========================================================
 function renderSettings() {
   const me = currentUser();
-  const users = [...state.users].sort((a,b)=>a.name.localeCompare(b.name));
-  const rows = users.map(u => {
+  const all = [...state.users].sort((a,b)=>a.name.localeCompare(b.name));
+  // Approved users go in the Team table; pending/rejected go in the requests card.
+  const approved = all.filter(u => (u.status || 'approved') === 'approved');
+  const requests = all.filter(u => u.status === 'pending' || u.status === 'rejected');
+
+  const rows = approved.map(u => {
     const isMe = u.id === me.id;
     return `<tr>
       <td class="m">${escapeHtml(u.name)} ${isMe?'<span style="font-size:11px;color:var(--gc-gray-60);">(you)</span>':''}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
@@ -1738,7 +1786,55 @@ function renderSettings() {
     <thead><tr><th>User</th><th>Role</th><th>Created</th><th class="r">Actions</th></tr></thead>
     <tbody>${rows}</tbody>
   `;
+
+  // Pending / rejected access requests (PL approves or rejects).
+  const card = document.getElementById('pendingCard');
+  if (requests.length === 0) {
+    card.style.display = 'none';
+  } else {
+    card.style.display = '';
+    const preq = requests.map(u => {
+      const rejected = u.status === 'rejected';
+      const badge = rejected
+        ? '<span class="gc-badge gc-badge-gray">Rejected</span>'
+        : '<span class="gc-badge gc-badge-blue">Pending</span>';
+      const actions = rejected
+        ? `<button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="approveUser('${u.id}')">Approve</button>`
+        : `<button class="gc-btn gc-btn-primary gc-btn-sm" onclick="approveUser('${u.id}')">Approve</button>
+           <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="rejectUser('${u.id}')">Reject</button>`;
+      return `<tr>
+        <td class="m">${escapeHtml(u.name)}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
+        <td>${badge}</td>
+        <td>${fmtDate(u.created_at)}</td>
+        <td class="r"><div class="gc-row-actions">${actions}</div></td>
+      </tr>`;
+    }).join('');
+    document.getElementById('pendingTable').innerHTML = `
+      <thead><tr><th>User</th><th>Status</th><th>Requested</th><th class="r">Actions</th></tr></thead>
+      <tbody>${preq}</tbody>
+    `;
+  }
+
   hydrateSettingsInputs();
+}
+async function approveUser(id) {
+  const u = state.users.find(x => x.id === id);
+  if (!u) return;
+  const { error } = await sb.from('profiles').update({ status: 'approved' }).eq('id', id);
+  if (error) { alert('Could not approve user: ' + error.message); return; }
+  u.status = 'approved';
+  renderSettings();
+  flashNotice(`${u.name} approved.`);
+}
+async function rejectUser(id) {
+  const u = state.users.find(x => x.id === id);
+  if (!u) return;
+  if (!confirm(`Reject ${u.name}? They will not be able to access the app. You can approve them later.`)) return;
+  const { error } = await sb.from('profiles').update({ status: 'rejected' }).eq('id', id);
+  if (error) { alert('Could not reject user: ' + error.message); return; }
+  u.status = 'rejected';
+  renderSettings();
+  flashNotice(`${u.name} rejected.`);
 }
 function hydrateSettingsInputs() {
   const w = document.getElementById('settingsEditWindow');
@@ -1800,12 +1896,13 @@ async function saveInvite() {
   const pw    = document.getElementById('im_password').value;
   const role  = document.getElementById('im_role').value;
   if (!name || !email || pw.length < 6) { alert('Please fill all fields (password ≥ 6 characters).'); return; }
+  if (!/@growthcapital\.vc$/.test(email)) { alert('Email must be a @growthcapital.vc address.'); return; }
   // signUp with email confirmation enabled does NOT sign out the current PL
   const { data, error } = await sb.auth.signUp({ email, password: pw, options: { data: { name } } });
   if (error) { alert('Could not create account: ' + error.message); return; }
-  // Update role if not the default Analyst
-  if (role !== 'Analyst' && data.user) {
-    await sb.from('profiles').update({ role }).eq('id', data.user.id);
+  // PL-invited users are vouched for → auto-approved, and given the chosen role.
+  if (data.user) {
+    await sb.from('profiles').update({ role, status: 'approved' }).eq('id', data.user.id);
   }
   // Refresh the profiles list
   const { data: profiles } = await sb.from('profiles').select('*');
@@ -1965,8 +2062,9 @@ document.addEventListener('DOMContentLoaded', () => {
   sb.auth.onAuthStateChange(async (event, sbSession) => {
     if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
       if (sbSession) {
-        const ok = await loadAllFromSupabase();
-        if (ok) enterApp();
+        const res = await loadAllFromSupabase();
+        if (res === 'ok') enterApp();
+        else if (res === 'pending' || res === 'rejected') showPending(res);
         else showLogin();
       } else {
         showLogin();
