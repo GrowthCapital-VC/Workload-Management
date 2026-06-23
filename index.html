@@ -345,6 +345,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
       </div>
 
       <div id="submitNotice"></div>
+      <div id="carryNotice"></div>
 
       <div class="submit-grid">
         <div class="submit-col actual">
@@ -397,6 +398,21 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
           <table class="gc-table" id="historyTable"></table>
           <div class="gc-empty hide" id="historyEmpty">No submissions yet.</div>
         </div>
+      </div>
+
+      <div class="gc-card" id="historyWeekCard" style="display:none;">
+        <div class="gc-card-header">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span class="gc-card-title">Week detail</span>
+            <span id="historyWeekClosedTag"></span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <label style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--gc-gray-60); font-weight:600;">Week</label>
+            <select class="gc-select" id="historyWeekSelect" style="min-width:220px" onchange="renderHistoryWeekDetail()"></select>
+            <button class="gc-btn gc-btn-ghost gc-btn-sm" id="historyWeekToggle" style="display:none;">Close week</button>
+          </div>
+        </div>
+        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="historyWeekTable"></table></div>
       </div>
     </section>
 
@@ -458,6 +474,33 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
           </div>
         </div>
         <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="peopleMatrixTable"></table></div>
+      </div>
+
+      <div class="gc-card">
+        <div class="gc-card-header">
+          <div>
+            <span class="gc-card-title">Hours breakdown by project / deal</span>
+            <div class="gc-card-sub">How a person's hours split across projects and deals</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+            <div class="gc-form-group" style="margin-bottom:0; min-width:200px;">
+              <label>Person</label>
+              <select class="gc-select" id="peopleBreakdownUser" onchange="renderPeopleBreakdown()"></select>
+            </div>
+            <div class="gc-form-group" style="margin-bottom:0; min-width:170px;">
+              <label>Period</label>
+              <select class="gc-select" id="peopleBreakdownRange" onchange="renderPeopleBreakdown()">
+                <option value="1">Last week</option>
+                <option value="4" selected>Last 4 weeks</option>
+                <option value="8">Last 8 weeks</option>
+                <option value="13">Last 13 weeks</option>
+                <option value="26">Last 26 weeks</option>
+              </select>
+            </div>
+            <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="exportPeopleBreakdown()">↓ Excel</button>
+          </div>
+        </div>
+        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="peopleBreakdownTable"></table></div>
       </div>
 
       <div class="gc-card">
@@ -653,6 +696,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         <select class="gc-select" id="im_role">
           <option value="Analyst">Analyst</option>
           <option value="PL">PL</option>
+          <option value="Admin">Admin</option>
         </select>
       </div>
     </div>
@@ -714,7 +758,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const DEFAULT_SETTINGS = { edit_window_days: 14, hours_per_week_target: 40 };
 const PROJECT_TYPES = ['Deal', 'Project'];
 
-let state = { users: [], projects: [], records: [], settings: { ...DEFAULT_SETTINGS }, currentUser: null };
+let state = { users: [], projects: [], records: [], settings: { ...DEFAULT_SETTINGS }, currentUser: null, closedWeeks: new Set() };
 let editingRecord = null;
 let editingProjectId = null;
 let dragSrcId = null;
@@ -733,17 +777,19 @@ async function loadAllFromSupabase() {
     return myProfile.status; // 'pending' | 'rejected'
   }
 
-  const [{ data: profiles }, { data: projects }, { data: records }, { data: settingsRow }] = await Promise.all([
+  const [{ data: profiles }, { data: projects }, { data: records }, { data: settingsRow }, { data: closed }] = await Promise.all([
     sb.from('profiles').select('*'),
     sb.from('projects').select('*').order('ord'),
     sb.from('records').select('*'),
-    sb.from('settings').select('*').single()
+    sb.from('settings').select('*').single(),
+    sb.from('closed_weeks').select('week_start')
   ]);
 
   state.users    = profiles || [];
   state.projects = (projects || []).map(p => ({ ...p, order: p.ord }));
   state.records  = (records  || []).map(r => ({ ...r, entries: Array.isArray(r.entries) ? r.entries : [] }));
   state.settings = Object.assign({}, DEFAULT_SETTINGS, settingsRow || {});
+  state.closedWeeks = new Set((closed || []).map(c => c.week_start));
   state.currentUser = myProfile;
   return 'ok';
 }
@@ -758,6 +804,12 @@ function saveProjects() {
 
 function saveRecords() {
   sb.from('records').upsert(state.records).then(({ error }) => { if (error) console.error('saveRecords:', error); });
+}
+// Save a single record (used for edits) so closed-week rows are never re-upserted in bulk.
+function saveRecord(rec) {
+  return sb.from('records').upsert(rec).then(({ error }) => {
+    if (error) { console.error('saveRecord:', error); alert('Could not save: ' + error.message); }
+  });
 }
 
 function saveSettingsState() {
@@ -882,13 +934,13 @@ async function doSignup() {
   if (!name || !email || pw.length < 6)
     return showAuthError('signupError', 'Please fill all fields (password at least 6 characters).');
   if (!/@growthcapital\.vc$/.test(email))
-    return showAuthError('signupError', 'Registration is restricted to @growthcapital.vc email addresses.');
+    return showAuthError('signupError', 'This email address can’t be used to register.');
   const { error } = await sb.auth.signUp({ email, password: pw, options: { data: { name } } });
   if (error) return showAuthError('signupError', error.message);
   // If a session is created (email confirmation off), onAuthStateChange routes
   // the user to the pending screen. Otherwise show the login info message.
   showLogin();
-  showAuthInfo('loginInfo', 'Account created! A Team Lead must approve your account before you can sign in. (If email confirmation is enabled, confirm via the link in your inbox first.)');
+  showAuthInfo('loginInfo', 'Account created! Confirm your email via the link we just sent you, then a Team Lead will review your access before you can sign in.');
 }
 async function doLogout() {
   await sb.auth.signOut();
@@ -897,6 +949,12 @@ async function doLogout() {
 function currentUser() {
   return state.currentUser || null;
 }
+// Role helpers — Admin inherits every PL capability (Analyst < PL < Admin).
+function isPL(u) { u = u || currentUser(); return !!u && (u.role === 'PL' || u.role === 'Admin'); }
+function isAdmin(u) { u = u || currentUser(); return !!u && u.role === 'Admin'; }
+function roleBadgeClass(role) { return role === 'Admin' ? 'gc-badge-green' : role === 'PL' ? 'gc-badge-blue' : 'gc-badge-gray'; }
+// Week-lock helpers — a closed week cannot be edited by anyone until reopened.
+function isWeekClosed(week) { return state.closedWeeks instanceof Set && state.closedWeeks.has(week); }
 
 async function seedDemoProjects() {
   if (state.projects.length > 0) return;
@@ -913,8 +971,8 @@ async function seedDemoProjects() {
 async function enterApp() {
   const u = currentUser();
   if (!u) { document.getElementById('authView').classList.remove('hide'); document.getElementById('appView').classList.add('hide'); return; }
-  // Seed demo projects for the very first PL
-  if (u.role === 'PL') await seedDemoProjects();
+  // Seed demo projects for the very first PL/Admin
+  if (isPL(u)) await seedDemoProjects();
   document.getElementById('authView').classList.add('hide');
   document.getElementById('appView').classList.remove('hide');
   document.getElementById('hdrUserName').textContent = u.name;
@@ -929,7 +987,7 @@ function buildTabs() {
     { id: 'submit', label: 'Submit' },
     { id: 'history', label: 'History' },
   ];
-  if (u.role === 'PL') {
+  if (isPL(u)) {
     tabs.push({ id: 'dashboard', label: 'Dashboard' });
     tabs.push({ id: 'people', label: 'By Person' });
     tabs.push({ id: 'variance', label: 'Variance' });
@@ -1002,8 +1060,9 @@ function entriesForForm(user_id, week_start, type) {
 }
 
 function isRecordLockedForUser(rec, user) {
+  if (rec && isWeekClosed(rec.week_start)) return true; // a closed week is locked for everyone
   if (!rec) return false;
-  if (user.role === 'PL') return false;
+  if (isPL(user)) return false;
   const win = Number(state.settings.edit_window_days) || 0;
   if (win <= 0) return false;
   const submitted = new Date(rec.submitted_at || rec.updated_at || Date.now());
@@ -1024,22 +1083,47 @@ function renderSubmit() {
 
   const actualRec = findRecord(u.id, actualWeek, 'actual');
   const forecastRec = findRecord(u.id, forecastWeek, 'forecast');
-  const actualLocked = isRecordLockedForUser(actualRec, u);
-  const forecastLocked = isRecordLockedForUser(forecastRec, u);
+  const actualClosed = isWeekClosed(actualWeek);
+  const forecastClosed = isWeekClosed(forecastWeek);
+  const actualLocked = actualClosed || isRecordLockedForUser(actualRec, u);
+  const forecastLocked = forecastClosed || isRecordLockedForUser(forecastRec, u);
+
+  // Carry-over: seed an empty Actual from the forecast made for that same week.
+  let carryApplied = false;
+  let aEntries;
+  if (!actualRec && !actualLocked) {
+    const carrySrc = findRecord(u.id, actualWeek, 'forecast');
+    if (carrySrc && carrySrc.entries.length) {
+      const map = {}; carrySrc.entries.forEach(e => { map[e.project_id] = Number(e.hours) || 0; });
+      aEntries = activeProjects().map(p => ({ project_id: p.id, name: p.name, code: p.code, type: p.type || 'Project', hours: map[p.id] || 0 }));
+      carryApplied = true;
+    }
+  }
+  if (!aEntries) aEntries = entriesForForm(u.id, actualWeek, 'actual');
+  const fEntries = entriesForForm(u.id, forecastWeek, 'forecast');
 
   const noticeEl = document.getElementById('submitNotice');
   let html = '';
+  if (actualClosed || forecastClosed) {
+    const which = (actualClosed && forecastClosed) ? 'Both weeks are' : actualClosed ? 'The actual week is' : 'The forecast week is';
+    html += `<div class="notice notice-warn">🔒 ${which} closed. Editing is locked until an Admin reopens it.</div>`;
+  }
   if (actualRec && forecastRec) {
-    html = `<div class="notice notice-success">✔ You've already submitted for this week. ${actualLocked && forecastLocked ? 'Contact a PL to make further changes.' : 'You can edit the values below and resubmit.'}</div>`;
+    html += `<div class="notice notice-success">✔ You've already submitted for this week. ${actualLocked && forecastLocked ? 'Contact a PL to make further changes.' : 'You can edit the values below and resubmit.'}</div>`;
   } else if (actualRec || forecastRec) {
-    html = `<div class="notice notice-info">You've only partially submitted. Complete the other column and resubmit.</div>`;
+    html += `<div class="notice notice-info">You've only partially submitted. Complete the other column and resubmit.</div>`;
   } else {
     const dow = today.getDay();
     if (dow > 1 || (dow === 1 && today.getHours() >= 18)) {
-      html = `<div class="notice notice-warn">⚠ You're past the soft deadline (Monday 18:00). Please submit as soon as possible.</div>`;
+      html += `<div class="notice notice-warn">⚠ You're past the soft deadline (Monday 18:00). Please submit as soon as possible.</div>`;
     }
   }
   noticeEl.innerHTML = html;
+
+  // Carry-over banner — dismisses on the first edit.
+  document.getElementById('carryNotice').innerHTML = carryApplied
+    ? `<div class="notice notice-info" id="carryBanner">↳ Your <strong>Actual</strong> is pre-filled from the forecast you made for this week. Review and adjust the numbers, then submit.</div>`
+    : '';
 
   const target = Number(state.settings.hours_per_week_target) || 40;
   const lastSub = state.records.filter(r => r.user_id === u.id).sort((a,b) => (b.submitted_at||'').localeCompare(a.submitted_at||''))[0];
@@ -1050,11 +1134,8 @@ function renderSubmit() {
     <div><div class="gc-cp-stat-label">Last submission</div><div class="gc-cp-stat-value wh" style="font-size:14px">${lastSub ? fmtDate(lastSub.submitted_at) : '—'}</div></div>
   `;
 
-  const aEntries = entriesForForm(u.id, actualWeek, 'actual');
-  const fEntries = entriesForForm(u.id, forecastWeek, 'forecast');
-
   if (aEntries.length === 0) {
-    document.getElementById('actualRows').innerHTML = `<div class="gc-empty">No active projects. ${u.role==='PL'?'Go to the Projects tab to add one.':'Ask a PL to create them.'}</div>`;
+    document.getElementById('actualRows').innerHTML = `<div class="gc-empty">No active projects. ${isPL(u)?'Go to the Projects tab to add one.':'Ask a PL to create them.'}</div>`;
     document.getElementById('forecastRows').innerHTML = `<div class="gc-empty">No active projects.</div>`;
   } else {
     document.getElementById('actualRows').innerHTML = aEntries.map(e => submitRowHtml(e, 'a', actualLocked)).join('');
@@ -1062,10 +1143,18 @@ function renderSubmit() {
   }
 
   document.getElementById('submitBtn').disabled = (actualLocked && forecastLocked) || aEntries.length === 0;
-  if (actualLocked && forecastLocked) {
+  if (actualClosed && forecastClosed) {
+    document.getElementById('submitBtn').textContent = 'Week closed';
+  } else if (actualLocked && forecastLocked) {
     document.getElementById('submitBtn').textContent = 'Locked (outside edit window)';
   } else {
     document.getElementById('submitBtn').textContent = (actualRec || forecastRec) ? 'Save changes' : 'Submit';
+  }
+
+  if (carryApplied) {
+    document.querySelectorAll('#actualRows input').forEach(inp => {
+      inp.addEventListener('input', () => { const b = document.getElementById('carryBanner'); if (b) b.remove(); }, { once: true });
+    });
   }
 
   recomputeSubmitTotals();
@@ -1110,10 +1199,12 @@ function submitWorkload() {
   const { actual, forecast } = readSubmitForm();
   const now = new Date().toISOString();
 
-  upsertRecord(u.id, lastMon, 'actual', actual, now);
-  upsertRecord(u.id, thisMon, 'forecast', forecast, now);
+  const aLocked = isWeekClosed(lastMon) || isRecordLockedForUser(findRecord(u.id, lastMon, 'actual'), u);
+  const fLocked = isWeekClosed(thisMon) || isRecordLockedForUser(findRecord(u.id, thisMon, 'forecast'), u);
 
-  saveRecords();
+  if (!aLocked) saveRecord(upsertRecord(u.id, lastMon, 'actual', actual, now));
+  if (!fLocked) saveRecord(upsertRecord(u.id, thisMon, 'forecast', forecast, now));
+
   renderSubmit();
   flashNotice('Workload submitted.');
 }
@@ -1124,9 +1215,11 @@ function upsertRecord(user_id, week_start, type, entries, ts) {
   if (existing) {
     existing.entries = clean;
     existing.updated_at = ts;
-  } else {
-    state.records.push({ id: uid(), user_id, week_start, type, entries: clean, submitted_at: ts, updated_at: ts });
+    return existing;
   }
+  const rec = { id: uid(), user_id, week_start, type, entries: clean, submitted_at: ts, updated_at: ts };
+  state.records.push(rec);
+  return rec;
 }
 
 function flashNotice(msg) {
@@ -1147,8 +1240,9 @@ function flashNotice(msg) {
 // =========================================================
 function renderHistory() {
   const u = currentUser();
+  renderHistoryWeekDetail(); // PL-only per-week, all-people breakdown card
   const userPickerWrap = document.getElementById('historyUserPicker');
-  if (u.role === 'PL') {
+  if (isPL(u)) {
     userPickerWrap.classList.remove('hide');
     const sel = document.getElementById('historyUserSelect');
     if (sel.options.length !== state.users.length + 1) {
@@ -1162,7 +1256,7 @@ function renderHistory() {
   }
 
   const sel = document.getElementById('historyUserSelect');
-  const targetUserId = (u.role === 'PL' && sel.value && sel.value !== '__me') ? sel.value : u.id;
+  const targetUserId = (isPL(u) && sel.value && sel.value !== '__me') ? sel.value : u.id;
   const targetUser = state.users.find(x => x.id === targetUserId);
   document.getElementById('historyTitle').textContent = (targetUserId === u.id) ? 'My history' : `History — ${targetUser.name}`;
 
@@ -1182,19 +1276,21 @@ function renderHistory() {
   }
   empty.classList.add('hide');
 
-  const canEditPast = (u.role === 'PL');
+  const canEditPast = isPL(u);
   const rows = weekArr.map(w => {
     const actual = userRecords.find(r => r.week_start === w && r.type === 'actual');
     const forecast = userRecords.find(r => r.week_start === w && r.type === 'forecast');
     const aHours = actual ? actual.entries.reduce((s,e)=>s+e.hours, 0) : null;
     const fHours = forecast ? forecast.entries.reduce((s,e)=>s+e.hours, 0) : null;
     const status = (actual && forecast) ? 'complete' : (actual || forecast) ? 'partial' : 'missing';
+    const closed = isWeekClosed(w);
     const aLocked = isRecordLockedForUser(actual, u);
     const fLocked = isRecordLockedForUser(forecast, u);
-    const editable = canEditPast || !(aLocked && fLocked && actual && forecast);
+    const editable = !closed && (canEditPast || !(aLocked && fLocked && actual && forecast));
+    const closedTag = closed ? `<span class="gc-badge gc-badge-gray" title="Week closed — locked" style="margin-top:2px;">🔒 Closed</span>` : '';
     return `
       <tr data-week="${w}">
-        <td class="m">${fmtWeekRange(w)}<div style="font-size:11px;color:var(--gc-gray-60)">W${isoWeekNumber(parseYmd(w))}</div></td>
+        <td class="m">${fmtWeekRange(w)}<div style="font-size:11px;color:var(--gc-gray-60)">W${isoWeekNumber(parseYmd(w))}</div>${closedTag}</td>
         <td>${actual ? `<span class="gc-badge gc-badge-blue">Submitted</span><div style="font-size:11px;color:var(--gc-gray-60);margin-top:2px;">${fmtDate(actual.submitted_at)}</div>` : `<span class="gc-badge gc-badge-gray">—</span>`}</td>
         <td class="r m">${aHours == null ? '—' : aHours.toFixed(1).replace(/\.0$/,'') + 'h'}</td>
         <td>${forecast ? `<span class="gc-badge gc-badge-lime">Submitted</span><div style="font-size:11px;color:var(--gc-gray-60);margin-top:2px;">${fmtDate(forecast.submitted_at)}</div>` : `<span class="gc-badge gc-badge-gray">—</span>`}</td>
@@ -1204,6 +1300,7 @@ function renderHistory() {
           <div class="gc-row-actions">
             <button class="gc-icon-btn" title="Expand detail" onclick="toggleHistoryDetail('${w}', '${targetUserId}', this)">▾</button>
             ${editable ? `<button class="gc-icon-btn" title="Edit" onclick="openEditRecord('${targetUserId}', '${w}')">✎</button>` : ''}
+            ${isAdmin(u) ? `<button class="gc-icon-btn" title="${closed?'Reopen week':'Close week'}" onclick="toggleWeekClosed('${w}')">${closed?'🔓':'🔒'}</button>` : ''}
           </div>
         </td>
       </tr>
@@ -1230,6 +1327,77 @@ function statusBadge(s) {
   if (s === 'complete') return `<span class="gc-badge gc-badge-green">Complete</span>`;
   if (s === 'partial')  return `<span class="gc-badge gc-badge-amber">Partial</span>`;
   return `<span class="gc-badge gc-badge-red">Missing</span>`;
+}
+
+// ── Close / reopen a week (Admin only) ────────────────────────
+async function toggleWeekClosed(week) {
+  if (!isAdmin()) { alert('Only an Admin can close or reopen a week.'); return; }
+  const closed = isWeekClosed(week);
+  if (closed) {
+    if (!confirm(`Reopen the week of ${fmtWeekRange(week)}? Everyone will be able to edit it again.`)) return;
+    const { error } = await sb.from('closed_weeks').delete().eq('week_start', week);
+    if (error) { alert('Could not reopen the week: ' + error.message); return; }
+    state.closedWeeks.delete(week);
+    flashNotice('Week reopened.');
+  } else {
+    if (!confirm(`Close the week of ${fmtWeekRange(week)}? No one (not even PLs) will be able to edit it until you reopen it.`)) return;
+    const { error } = await sb.from('closed_weeks').insert({ week_start: week, closed_by: currentUser().id });
+    if (error) { alert('Could not close the week: ' + error.message); return; }
+    state.closedWeeks.add(week);
+    flashNotice('Week closed.');
+  }
+  renderActiveSection();
+}
+
+// ── History: per-week breakdown across all people (PL) ────────
+function renderHistoryWeekDetail() {
+  const u = currentUser();
+  const card = document.getElementById('historyWeekCard');
+  if (!card) return;
+  if (!isPL(u)) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const weeks = lastNMondays(13).slice().reverse(); // most recent first
+  const sel = document.getElementById('historyWeekSelect');
+  if (sel.options.length !== weeks.length) {
+    const cur = sel.value;
+    sel.innerHTML = weeks.map(w => `<option value="${w}">${fmtWeekRange(w)} — W${isoWeekNumber(parseYmd(w))}</option>`).join('');
+    sel.value = (cur && weeks.includes(cur)) ? cur : weeks[0];
+  }
+  const week = sel.value || weeks[0];
+  const closed = isWeekClosed(week);
+
+  document.getElementById('historyWeekClosedTag').innerHTML = closed
+    ? `<span class="gc-badge gc-badge-gray">🔒 Closed</span>` : '';
+  const adminBtn = document.getElementById('historyWeekToggle');
+  if (isAdmin(u)) {
+    adminBtn.style.display = '';
+    adminBtn.textContent = closed ? 'Reopen week' : 'Close week';
+    adminBtn.onclick = () => toggleWeekClosed(week);
+  } else {
+    adminBtn.style.display = 'none';
+  }
+
+  const users = [...state.users].filter(x => (x.status || 'approved') === 'approved').sort((a,b)=>a.name.localeCompare(b.name));
+  const rows = users.map(x => {
+    const a = findRecord(x.id, week, 'actual');
+    const f = findRecord(x.id, week, 'forecast');
+    const aH = a ? a.entries.reduce((s,e)=>s+e.hours,0) : null;
+    const fH = f ? f.entries.reduce((s,e)=>s+e.hours,0) : null;
+    const status = (a && f) ? 'complete' : (a || f) ? 'partial' : 'missing';
+    return `<tr>
+      <td class="m">${escapeHtml(x.name)}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(x.email)}</div></td>
+      <td class="r m">${aH == null ? '—' : fmtHours(aH)}</td>
+      <td class="r">${fH == null ? '—' : fmtHours(fH)}</td>
+      <td>${statusBadge(status)}</td>
+      <td class="r"><button class="gc-icon-btn" title="Project detail" onclick="toggleHistoryDetail('${week}','${x.id}', this)">▾</button></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('historyWeekTable').innerHTML = `
+    <thead><tr><th>Person</th><th class="r">Actual</th><th class="r">Forecast</th><th>Status</th><th class="r">Detail</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="5" class="gc-empty">No users.</td></tr>'}</tbody>
+  `;
 }
 
 function toggleHistoryDetail(week, user_id, btn) {
@@ -1319,9 +1487,9 @@ function saveEditRecord() {
   const aEntries = [...document.querySelectorAll('#erm_actualRows input[data-prefix="ea"]')].map(i => ({ project_id: i.dataset.project, hours: parseFloat(i.value) || 0 }));
   const fEntries = [...document.querySelectorAll('#erm_forecastRows input[data-prefix="ef"]')].map(i => ({ project_id: i.dataset.project, hours: parseFloat(i.value) || 0 }));
   const now = new Date().toISOString();
-  upsertRecord(user_id, week_actual, 'actual', aEntries, now);
-  upsertRecord(user_id, week_actual, 'forecast', fEntries, now);
-  saveRecords();
+  if (isWeekClosed(week_actual)) { alert('This week is closed. An Admin must reopen it before it can be edited.'); return; }
+  saveRecord(upsertRecord(user_id, week_actual, 'actual', aEntries, now));
+  saveRecord(upsertRecord(user_id, week_actual, 'forecast', fEntries, now));
   closeModal('editRecordModal');
   renderActiveSection();
   flashNotice('Submission updated.');
@@ -1491,7 +1659,7 @@ function renderPeopleMatrix() {
     }).join('');
     return `<tr>
       <td class="m">${escapeHtml(u.name)}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
-      <td><span class="gc-badge ${u.role==='PL'?'gc-badge-blue':'gc-badge-gray'}">${u.role}</span></td>
+      <td><span class="gc-badge ${roleBadgeClass(u.role)}">${u.role}</span></td>
       ${cells}
       <td class="r m">${fmtHours(totA)}</td>
     </tr>`;
@@ -1522,6 +1690,69 @@ function renderPeopleMatrix() {
       options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Hours' } } } }
     });
   }
+
+  renderPeopleBreakdown();
+}
+
+// ── By Person: hours split across projects/deals ─────────────
+function peopleBreakdownData() {
+  const userSel = document.getElementById('peopleBreakdownUser');
+  const n = parseInt(document.getElementById('peopleBreakdownRange').value, 10) || 4;
+  const weeks = new Set(lastNMondays(n));
+  const userId = userSel.value || '__all';
+  const recs = state.records.filter(r => r.type === 'actual' && weeks.has(r.week_start)
+    && (userId === '__all' || r.user_id === userId));
+  const fRecs = state.records.filter(r => r.type === 'forecast' && weeks.has(r.week_start)
+    && (userId === '__all' || r.user_id === userId));
+  const map = {};
+  const add = (list, key) => list.forEach(r => r.entries.forEach(e => {
+    if (!map[e.project_id]) map[e.project_id] = { actual: 0, forecast: 0 };
+    map[e.project_id][key] += Number(e.hours) || 0;
+  }));
+  add(recs, 'actual'); add(fRecs, 'forecast');
+  const rows = Object.entries(map).map(([pid, v]) => {
+    const p = state.projects.find(x => x.id === pid);
+    return { name: p ? p.name : '(deleted)', code: p ? (p.code || '') : '', type: p ? (p.type || 'Project') : 'Project',
+             order: p ? (p.order || 0) : 9999, actual: v.actual, forecast: v.forecast };
+  }).filter(r => r.actual > 0 || r.forecast > 0)
+    .sort((a,b) => (a.order - b.order) || a.name.localeCompare(b.name));
+  const totalA = rows.reduce((s,r)=>s+r.actual,0);
+  return { rows, totalA, userId, n };
+}
+
+function renderPeopleBreakdown() {
+  const sel = document.getElementById('peopleBreakdownUser');
+  if (!sel) return;
+  const users = [...state.users].filter(x => (x.status || 'approved') === 'approved').sort((a,b)=>a.name.localeCompare(b.name));
+  if (sel.options.length !== users.length + 1) {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="__all">All team</option>' +
+      users.map(x => `<option value="${x.id}">${escapeHtml(x.name)}</option>`).join('');
+    sel.value = cur || '__all';
+  }
+  const { rows, totalA } = peopleBreakdownData();
+  const body = rows.map(r => {
+    const share = totalA > 0 ? (r.actual / totalA * 100) : 0;
+    return `<tr>
+      <td>${projectTypeBadge(r.type)}</td>
+      <td class="m">${escapeHtml(r.name)}${r.code ? ` <span class="proj-code">${escapeHtml(r.code)}</span>` : ''}</td>
+      <td class="r m">${fmtHours(r.actual)}</td>
+      <td class="r">${fmtHours(r.forecast)}</td>
+      <td class="r">${share.toFixed(0)}%</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('peopleBreakdownTable').innerHTML = `
+    <thead><tr><th>Type</th><th>Project / Deal</th><th class="r">Actual</th><th class="r">Forecast</th><th class="r">Share</th></tr></thead>
+    <tbody>${body || '<tr><td colspan="5" class="gc-empty">No hours logged in this period.</td></tr>'}</tbody>
+  `;
+}
+
+function exportPeopleBreakdown() {
+  const { rows, userId } = peopleBreakdownData();
+  const who = userId === '__all' ? 'All_team' : ((state.users.find(x=>x.id===userId)||{}).name || 'User').replace(/\s+/g,'_');
+  const data = [['Project / Deal', 'Type', 'Code', 'Actual hours', 'Forecast hours']];
+  rows.forEach(r => data.push([r.name, r.type, r.code, r.actual, r.forecast]));
+  downloadXlsx(`breakdown_${who}.xlsx`, 'Breakdown', data);
 }
 
 // =========================================================
@@ -1773,6 +2004,7 @@ function renderSettings() {
         <select class="gc-select small" style="font-size:12px;padding:4px 8px;" ${isMe?'disabled':''} onchange="changeUserRole('${u.id}', this.value)">
           <option value="Analyst" ${u.role==='Analyst'?'selected':''}>Analyst</option>
           <option value="PL" ${u.role==='PL'?'selected':''}>PL</option>
+          <option value="Admin" ${u.role==='Admin'?'selected':''}>Admin</option>
         </select>
       </td>
       <td>${fmtDate(u.created_at)}</td>
@@ -1798,10 +2030,11 @@ function renderSettings() {
       const badge = rejected
         ? '<span class="gc-badge gc-badge-gray">Rejected</span>'
         : '<span class="gc-badge gc-badge-blue">Pending</span>';
+      const del = `<button class="gc-icon-btn danger" title="Delete this request" onclick="deleteRequest('${u.id}')">×</button>`;
       const actions = rejected
-        ? `<button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="approveUser('${u.id}')">Approve</button>`
+        ? `<button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="approveUser('${u.id}')">Approve</button>${del}`
         : `<button class="gc-btn gc-btn-primary gc-btn-sm" onclick="approveUser('${u.id}')">Approve</button>
-           <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="rejectUser('${u.id}')">Reject</button>`;
+           <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="rejectUser('${u.id}')">Reject</button>${del}`;
       return `<tr>
         <td class="m">${escapeHtml(u.name)}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
         <td>${badge}</td>
@@ -1836,6 +2069,16 @@ async function rejectUser(id) {
   renderSettings();
   flashNotice(`${u.name} rejected.`);
 }
+async function deleteRequest(id) {
+  const u = state.users.find(x => x.id === id);
+  if (!u) return;
+  if (!confirm(`Permanently delete the access request from ${u.name} (${u.email})? This removes them from the list.`)) return;
+  const { error } = await sb.from('profiles').delete().eq('id', id);
+  if (error) { alert('Could not delete request: ' + error.message); return; }
+  state.users = state.users.filter(x => x.id !== id);
+  renderSettings();
+  flashNotice('Request deleted.');
+}
 function hydrateSettingsInputs() {
   const w = document.getElementById('settingsEditWindow');
   const h = document.getElementById('settingsHoursTarget');
@@ -1853,8 +2096,16 @@ async function changeUserRole(id, role) {
   if (!u) return;
   const prev = u.role;
   if (role === prev) return;
-  const verb = role === 'PL' ? `Promote ${u.name} to PL?\n\nPLs can manage projects, edit anyone's records, change settings, and add/remove users.`
-                             : `Downgrade ${u.name} to Analyst?\n\nThey will lose access to the dashboards, projects and team management.`;
+  const currentAdmin = state.users.find(x => x.role === 'Admin' && x.id !== id);
+  let verb;
+  if (role === 'Admin') {
+    verb = `Make ${u.name} the Admin?\n\nThe Admin can do everything a PL can, plus close and reopen weeks.`
+         + (currentAdmin ? `\n\nThere can be only one Admin, so ${currentAdmin.name} will be moved back to PL.` : '');
+  } else if (role === 'PL') {
+    verb = `Set ${u.name} as PL?\n\nPLs can manage projects, edit anyone's records, change settings, and add/remove users.`;
+  } else {
+    verb = `Downgrade ${u.name} to Analyst?\n\nThey will lose access to the dashboards, projects and team management.`;
+  }
   if (!confirm(verb)) { renderSettings(); return; }
   const { error } = await sb.from('profiles').update({ role }).eq('id', id);
   if (error) {
@@ -1862,7 +2113,10 @@ async function changeUserRole(id, role) {
     renderSettings(); // revert the dropdown to the real value
     return;
   }
-  u.role = role;
+  // Re-fetch profiles: a DB trigger may have auto-demoted the previous Admin.
+  const { data: profiles } = await sb.from('profiles').select('*');
+  if (profiles) state.users = profiles;
+  else u.role = role;
   renderSettings();
   flashNotice(`${u.name} is now ${role}.`);
 }
@@ -2070,7 +2324,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showLogin();
       }
     } else if (event === 'SIGNED_OUT') {
-      state = { users: [], projects: [], records: [], settings: { ...DEFAULT_SETTINGS }, currentUser: null };
+      state = { users: [], projects: [], records: [], settings: { ...DEFAULT_SETTINGS }, currentUser: null, closedWeeks: new Set() };
       showLogin();
     }
   });

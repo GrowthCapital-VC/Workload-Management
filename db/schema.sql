@@ -270,3 +270,130 @@ drop policy if exists "update_records" on public.records;
 create policy "update_records"
   on public.records for update to authenticated
   using (public.is_approved() and (user_id = auth.uid() or public.is_pl()));
+
+-- =============================================================
+-- MIGRATION 3 — Admin role + week closing
+-- (additive & idempotent — safe to run on the live database)
+--
+--  • New 'Admin' role, one at a time. Admin = PL + can close/reopen
+--    weeks. Assigning Admin auto-transfers it (old Admin → PL).
+--  • A closed week cannot be edited by ANYONE until reopened.
+-- =============================================================
+
+-- 1) Allow the Admin role.
+alter table public.profiles drop constraint if exists profiles_role_check;
+alter table public.profiles
+  add constraint profiles_role_check check (role in ('Analyst', 'PL', 'Admin'));
+
+-- 2) Privilege helpers. Admin inherits all PL powers.
+create or replace function public.is_pl()
+returns boolean language sql security definer stable as $$
+  select exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role in ('PL', 'Admin')
+  )
+$$;
+create or replace function public.is_admin()
+returns boolean language sql security definer stable as $$
+  select exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'Admin'
+  )
+$$;
+
+-- 2b) On a fresh org the first user is the Admin (auto-approved).
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer as $$
+declare
+  is_first boolean;
+begin
+  if lower(split_part(new.email, '@', 2)) <> 'growthcapital.vc' then
+    raise exception 'Registration is restricted to @growthcapital.vc email addresses.';
+  end if;
+  select not exists (select 1 from public.profiles limit 1) into is_first;
+  insert into public.profiles (id, email, name, role, status)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    case when is_first then 'Admin' else 'Analyst' end,
+    case when is_first then 'approved' else 'pending' end
+  );
+  return new;
+end;
+$$;
+
+-- 3) Guard: enforce single-Admin (auto-transfer), role/status rules,
+--    and never leave the org without a PL/Admin.
+create or replace function public.guard_profile_change()
+returns trigger language plpgsql security definer as $$
+begin
+  -- Service-role / SQL-editor changes (no auth context) are trusted.
+  if auth.uid() is null then
+    return new;
+  end if;
+  if new.role is distinct from old.role then
+    if not public.is_pl() then
+      raise exception 'Only a PL can change a user role.';
+    end if;
+    if old.role in ('PL', 'Admin') and new.role = 'Analyst'
+       and (select count(*) from public.profiles where role in ('PL', 'Admin')) <= 1 then
+      raise exception 'Cannot remove the last remaining PL/Admin.';
+    end if;
+    -- Only one Admin: promoting someone to Admin demotes the current one.
+    if new.role = 'Admin' then
+      update public.profiles set role = 'PL' where role = 'Admin' and id <> new.id;
+    end if;
+  end if;
+  if new.status is distinct from old.status and not public.is_pl() then
+    raise exception 'Only a PL can approve or reject a user.';
+  end if;
+  return new;
+end;
+$$;
+
+-- 4) Closed-weeks registry (which weeks are locked for everyone).
+create table if not exists public.closed_weeks (
+  week_start date primary key,
+  closed_at  timestamptz default now(),
+  closed_by  uuid references auth.users(id)
+);
+alter table public.closed_weeks enable row level security;
+
+drop policy if exists "read_closed_weeks" on public.closed_weeks;
+create policy "read_closed_weeks"
+  on public.closed_weeks for select to authenticated
+  using (public.is_approved());
+drop policy if exists "admin_insert_closed_weeks" on public.closed_weeks;
+create policy "admin_insert_closed_weeks"
+  on public.closed_weeks for insert to authenticated
+  with check (public.is_admin());
+drop policy if exists "admin_delete_closed_weeks" on public.closed_weeks;
+create policy "admin_delete_closed_weeks"
+  on public.closed_weeks for delete to authenticated
+  using (public.is_admin());
+
+-- 5) Block writing records that belong to a closed week (everyone).
+drop policy if exists "insert_records" on public.records;
+create policy "insert_records"
+  on public.records for insert to authenticated
+  with check (
+    public.is_approved()
+    and (user_id = auth.uid() or public.is_pl())
+    and not exists (select 1 from public.closed_weeks cw where cw.week_start = records.week_start)
+  );
+drop policy if exists "update_records" on public.records;
+create policy "update_records"
+  on public.records for update to authenticated
+  using (
+    public.is_approved()
+    and (user_id = auth.uid() or public.is_pl())
+    and not exists (select 1 from public.closed_weeks cw where cw.week_start = records.week_start)
+  );
+
+-- 6) Convenience: if there is exactly one PL and no Admin yet,
+--    promote that PL to Admin so weeks can be closed from the start.
+update public.profiles set role = 'Admin'
+where role = 'PL'
+  and not exists (select 1 from public.profiles where role = 'Admin')
+  and (select count(*) from public.profiles where role = 'PL') = 1;
