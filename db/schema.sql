@@ -119,3 +119,42 @@ create policy "read_settings"
   on public.settings for select to authenticated using (true);
 create policy "pl_update_settings"
   on public.settings for update to authenticated using (public.is_pl());
+
+-- =============================================================
+-- ROLE-CHANGE GUARD
+-- (safe to run on an existing database — additive only)
+--
+-- The update_profile policy above lets a user update their OWN
+-- profile (so they can edit their name). On its own that would
+-- also let an Analyst set their own role to 'PL' via a direct
+-- API call, bypassing the UI. This trigger enforces the real
+-- rule: only a PL may change ANY profile's role, and the last
+-- remaining PL can never be demoted (prevents org lockout).
+-- =============================================================
+create or replace function public.guard_role_change()
+returns trigger language plpgsql security definer as $$
+begin
+  -- Role not changing: allow (e.g. user editing their own name).
+  if new.role is not distinct from old.role then
+    return new;
+  end if;
+
+  -- Role is changing: only a PL may do this.
+  if not public.is_pl() then
+    raise exception 'Only a PL can change a user role.';
+  end if;
+
+  -- Never demote the last remaining PL.
+  if old.role = 'PL' and new.role <> 'PL'
+     and (select count(*) from public.profiles where role = 'PL') <= 1 then
+    raise exception 'Cannot demote the last remaining PL.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_profile_role_change on public.profiles;
+create trigger on_profile_role_change
+  before update on public.profiles
+  for each row execute function public.guard_role_change();
