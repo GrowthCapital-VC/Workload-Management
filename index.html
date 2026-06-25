@@ -507,9 +507,21 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         <div class="gc-card-header">
           <div>
             <span class="gc-card-title">Workload by person</span>
-            <div class="gc-card-sub">Last 4 weeks — actual hours split by project / deal</div>
+            <div class="gc-card-sub" id="peopleLoadSub">Actual hours split by Deals vs Projects</div>
           </div>
-          <button class="gc-btn gc-btn-ghost gc-btn-sm" id="peopleLoadViewBtn" onclick="togglePeopleLoadView()">↔ Bar view</button>
+          <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+            <div class="gc-form-group" style="margin-bottom:0; min-width:160px;">
+              <label>Period</label>
+              <select class="gc-select" id="peopleLoadRange" onchange="renderPeopleLoadChart()">
+                <option value="1">Latest week</option>
+                <option value="4" selected>Last 4 weeks</option>
+                <option value="8">Last 8 weeks</option>
+                <option value="13">Last 13 weeks</option>
+                <option value="26">Last 26 weeks</option>
+              </select>
+            </div>
+            <button class="gc-btn gc-btn-ghost gc-btn-sm" id="peopleLoadViewBtn" onclick="togglePeopleLoadView()">↔ Bar view</button>
+          </div>
         </div>
         <div class="gc-card-body"><div class="gc-chart-container" style="height:420px;"><canvas id="chartPersonLoad"></canvas></div></div>
       </div>
@@ -1672,45 +1684,88 @@ function renderPeopleMatrix() {
   renderPeopleBreakdown();
 }
 
-// "Workload by person" — actual hours (last 4 weeks) stacked by project/deal.
-// Switches between vertical columns and horizontal bars.
+// "Workload by person" — actual hours stacked by TYPE (Deals vs Projects),
+// over a selectable period, with per-user totals and a per-project tooltip.
+const DEAL_COLOR = '#003EFF';      // matches the Deal badge
+const PROJECT_COLOR = '#C4F222';   // matches the Project badge
 let peopleLoadHorizontal = false;
 function togglePeopleLoadView() {
   peopleLoadHorizontal = !peopleLoadHorizontal;
   renderPeopleLoadChart();
 }
+function peopleLoadPeriodLabel(weeks) {
+  if (weeks.length === 1) return 'Week of ' + fmtWeekRange(weeks[0]);
+  return `${fmtWeekShort(weeks[0])} → ${fmtWeekRange(weeks[weeks.length - 1])}`;
+}
 function renderPeopleLoadChart() {
+  const horiz = peopleLoadHorizontal;
+  const rangeSel = document.getElementById('peopleLoadRange');
+  const n = rangeSel ? (parseInt(rangeSel.value, 10) || 4) : 4;
+  const weeks = lastNMondays(n);                 // oldest → newest
+  const weekSet = new Set(weeks);
   const users = [...state.users].filter(x => (x.status || 'approved') === 'approved').sort((a,b)=>a.name.localeCompare(b.name));
-  const weeks4 = new Set(lastNMondays(4));
 
-  // Per-user, per-project actual hours.
+  const sub = document.getElementById('peopleLoadSub');
+  if (sub) sub.textContent = `Actual hours · ${peopleLoadPeriodLabel(weeks)}`;
+
+  // Per-user, per-project actual hours over the period.
   const perUser = {};
-  state.records.filter(r => r.type === 'actual' && weeks4.has(r.week_start)).forEach(r => {
+  state.records.filter(r => r.type === 'actual' && weekSet.has(r.week_start)).forEach(r => {
     if (!perUser[r.user_id]) perUser[r.user_id] = {};
     r.entries.forEach(e => { perUser[r.user_id][e.project_id] = (perUser[r.user_id][e.project_id] || 0) + (Number(e.hours) || 0); });
   });
+  const projType = {}; state.projects.forEach(p => { projType[p.id] = (p.type === 'Deal') ? 'Deal' : 'Project'; });
 
-  // Projects that actually have hours, in display order (+ any deleted ones).
-  const pidsWithHours = new Set();
-  Object.values(perUser).forEach(m => Object.keys(m).forEach(pid => pidsWithHours.add(pid)));
-  const ordered = sortedProjects(state.projects.filter(p => pidsWithHours.has(p.id))).map(p => ({ id: p.id, name: p.name }));
-  [...pidsWithHours].forEach(pid => { if (!state.projects.some(p => p.id === pid)) ordered.push({ id: pid, name: '(deleted)' }); });
+  // Aggregate per user into Deal vs Project totals; keep per-project detail for tooltips.
+  const dealData = [], projData = [], perUserBreakdown = {};
+  users.forEach(u => {
+    let dealH = 0, projH = 0; const det = [];
+    const m = perUser[u.id] || {};
+    Object.entries(m).forEach(([pid, h]) => {
+      const p = state.projects.find(x => x.id === pid);
+      const t = projType[pid] || 'Project';
+      if (t === 'Deal') dealH += h; else projH += h;
+      det.push({ name: p ? p.name : '(deleted)', type: t, hours: h });
+    });
+    dealData.push(dealH); projData.push(projH);
+    perUserBreakdown[u.id] = det.sort((a,b)=>b.hours-a.hours);
+  });
 
   const labels = users.map(u => u.name);
-  const horiz = peopleLoadHorizontal;
-  const datasets = ordered.map((p, i) => ({
-    label: p.name,
-    data: users.map(u => (perUser[u.id] && perUser[u.id][p.id]) || 0),
-    backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
-    stack: 'load',
-    borderWidth: 0,
-    categoryPercentage: 0.8,
-    barPercentage: 0.92,
-    maxBarThickness: horiz ? 38 : 64,
-  }));
+  const dsCommon = { stack: 'load', borderColor: '#fff', borderWidth: 1, categoryPercentage: 0.82, barPercentage: 0.94, maxBarThickness: horiz ? 40 : 70 };
+  const datasets = [
+    { label: 'Deals', data: dealData, backgroundColor: DEAL_COLOR, ...dsCommon },
+    { label: 'Projects', data: projData, backgroundColor: PROJECT_COLOR, ...dsCommon },
+  ];
 
   const btn = document.getElementById('peopleLoadViewBtn');
   if (btn) btn.textContent = horiz ? '↕ Column view' : '↔ Bar view';
+
+  // Plugin: draw each person's total at the end of their bar.
+  const totalsPlugin = {
+    id: 'peopleLoadTotals',
+    afterDatasetsDraw(chart) {
+      const { ctx, scales } = chart;
+      const valueScale = horiz ? scales.x : scales.y;
+      const meta = chart.getDatasetMeta(chart.data.datasets.length - 1);
+      ctx.save();
+      ctx.font = '700 11px Montserrat, sans-serif';
+      ctx.fillStyle = '#1a1a2e';
+      for (let i = 0; i < labels.length; i++) {
+        const total = (dealData[i] || 0) + (projData[i] || 0);
+        const bar = meta.data[i];
+        if (total <= 0 || !bar) continue;
+        if (horiz) {
+          ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+          ctx.fillText(fmtHours(total), valueScale.getPixelForValue(total) + 6, bar.y);
+        } else {
+          ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+          ctx.fillText(fmtHours(total), bar.x, valueScale.getPixelForValue(total) - 6);
+        }
+      }
+      ctx.restore();
+    }
+  };
 
   if (chartPersonLoadInstance) { chartPersonLoadInstance.destroy(); chartPersonLoadInstance = null; }
   const ctx = document.getElementById('chartPersonLoad');
@@ -1721,13 +1776,24 @@ function renderPeopleLoadChart() {
   chartPersonLoadInstance = new Chart(ctx, {
     type: 'bar',
     data: { labels, datasets },
+    plugins: [totalsPlugin],
     options: {
       indexAxis: horiz ? 'y' : 'x',
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { right: horiz ? 48 : 8, top: horiz ? 8 : 20 } },
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { position: horiz ? 'top' : 'right', labels: { font: { family: 'Montserrat', size: 11 }, boxWidth: 12 } },
-        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtHours(c.parsed[horiz ? 'x' : 'y'])}` } }
+        tooltip: { callbacks: {
+          label: (c) => `${c.dataset.label}: ${fmtHours(c.parsed[horiz ? 'x' : 'y'])}`,
+          afterBody: (items) => {
+            if (!items.length) return '';
+            const u = users[items[0].dataIndex];
+            const det = (perUserBreakdown[u.id] || []).filter(d => d.hours > 0);
+            if (!det.length) return '';
+            return ['', ...det.map(d => `• ${d.name} (${d.type}): ${fmtHours(d.hours)}`)];
+          }
+        } }
       },
       scales: {
         x: { stacked: true, beginAtZero: true, title: horiz ? { display: true, text: 'Hours' } : { display: false } },
