@@ -563,7 +563,10 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
             <span class="gc-card-title">Projects &amp; Deals</span>
             <div class="gc-card-sub">Drag rows to reorder — the order is saved and shared across all PLs</div>
           </div>
-          <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="openProjectModal()">+ Add item</button>
+          <div style="display:flex; gap:8px;">
+            <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="cleanupDeletedHistory()">🧹 Clean deleted-item history</button>
+            <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="openProjectModal()">+ Add item</button>
+          </div>
         </div>
         <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="projectsTable"></table></div>
       </div>
@@ -2128,6 +2131,40 @@ async function deleteProject(id) {
   state.projects = state.projects.filter(x => x.id !== id);
   renderProjects();
   flashNotice('Item deleted.');
+}
+
+// Remove, from every submission, hours logged against items that no longer
+// exist in Projects (the "(deleted)" rows). PL/Admin only.
+async function cleanupDeletedHistory() {
+  const known = new Set(state.projects.map(p => p.id));
+  const changed = [];
+  let removedEntries = 0, skippedClosed = 0;
+  state.records.forEach(r => {
+    const orphans = r.entries.filter(e => !known.has(e.project_id));
+    if (orphans.length === 0) return;
+    if (isWeekClosed(r.week_start)) { skippedClosed++; return; }
+    removedEntries += orphans.length;
+    changed.push({ rec: r, kept: r.entries.filter(e => known.has(e.project_id)) });
+  });
+
+  if (removedEntries === 0) {
+    alert(skippedClosed > 0
+      ? 'The only leftover history is in closed weeks. Reopen those weeks first, then run the cleanup again.'
+      : 'Nothing to clean — there is no history referring to deleted items.');
+    return;
+  }
+  let msg = `Permanently remove ${removedEntries} logged hour-entr${removedEntries === 1 ? 'y' : 'ies'} that refer to deleted items, across ${changed.length} submission(s)? This cannot be undone.`;
+  if (skippedClosed > 0) msg += `\n\n(${skippedClosed} submission(s) in closed weeks will be skipped — reopen them to clean those too.)`;
+  if (!confirm(msg)) return;
+
+  const now = new Date().toISOString();
+  const payload = changed.map(({ rec, kept }) => ({ ...rec, entries: kept, updated_at: now }));
+  const { error } = await sb.from('records').upsert(payload);
+  if (error) { alert('Could not clean history: ' + error.message); return; }
+  // Reflect locally.
+  changed.forEach(({ rec, kept }) => { rec.entries = kept; rec.updated_at = now; });
+  renderActiveSection();
+  flashNotice(`Removed ${removedEntries} deleted-item entr${removedEntries === 1 ? 'y' : 'ies'}.`);
 }
 
 // =========================================================
