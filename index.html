@@ -507,10 +507,11 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         <div class="gc-card-header">
           <div>
             <span class="gc-card-title">Workload by person</span>
-            <div class="gc-card-sub">Last 4 weeks — total actual hours</div>
+            <div class="gc-card-sub">Last 4 weeks — actual hours split by project / deal</div>
           </div>
+          <button class="gc-btn gc-btn-ghost gc-btn-sm" id="peopleLoadViewBtn" onclick="togglePeopleLoadView()">↔ Bar view</button>
         </div>
-        <div class="gc-card-body"><div class="gc-chart-container" style="height:380px;"><canvas id="chartPersonLoad"></canvas></div></div>
+        <div class="gc-card-body"><div class="gc-chart-container" style="height:420px;"><canvas id="chartPersonLoad"></canvas></div></div>
       </div>
     </section>
 
@@ -1667,31 +1668,73 @@ function renderPeopleMatrix() {
 
   tbl.innerHTML = `<thead><tr>${headerCells}</tr></thead><tbody>${rows || '<tr><td colspan="11" class="gc-empty">No users.</td></tr>'}</tbody>`;
 
-  const weeks4 = lastNMondays(4);
-  const weeks4Set = new Set(weeks4);
-  const loadMap = {};
-  state.records.filter(r => r.type==='actual' && weeks4Set.has(r.week_start)).forEach(r => {
-    if (!loadMap[r.user_id]) loadMap[r.user_id] = 0;
-    loadMap[r.user_id] += r.entries.reduce((s,e)=>s+e.hours,0);
+  renderPeopleLoadChart();
+  renderPeopleBreakdown();
+}
+
+// "Workload by person" — actual hours (last 4 weeks) stacked by project/deal.
+// Switches between vertical columns and horizontal bars.
+let peopleLoadHorizontal = false;
+function togglePeopleLoadView() {
+  peopleLoadHorizontal = !peopleLoadHorizontal;
+  renderPeopleLoadChart();
+}
+function renderPeopleLoadChart() {
+  const users = [...state.users].filter(x => (x.status || 'approved') === 'approved').sort((a,b)=>a.name.localeCompare(b.name));
+  const weeks4 = new Set(lastNMondays(4));
+
+  // Per-user, per-project actual hours.
+  const perUser = {};
+  state.records.filter(r => r.type === 'actual' && weeks4.has(r.week_start)).forEach(r => {
+    if (!perUser[r.user_id]) perUser[r.user_id] = {};
+    r.entries.forEach(e => { perUser[r.user_id][e.project_id] = (perUser[r.user_id][e.project_id] || 0) + (Number(e.hours) || 0); });
   });
+
+  // Projects that actually have hours, in display order (+ any deleted ones).
+  const pidsWithHours = new Set();
+  Object.values(perUser).forEach(m => Object.keys(m).forEach(pid => pidsWithHours.add(pid)));
+  const ordered = sortedProjects(state.projects.filter(p => pidsWithHours.has(p.id))).map(p => ({ id: p.id, name: p.name }));
+  [...pidsWithHours].forEach(pid => { if (!state.projects.some(p => p.id === pid)) ordered.push({ id: pid, name: '(deleted)' }); });
+
   const labels = users.map(u => u.name);
-  const data = users.map(u => loadMap[u.id] || 0);
+  const horiz = peopleLoadHorizontal;
+  const datasets = ordered.map((p, i) => ({
+    label: p.name,
+    data: users.map(u => (perUser[u.id] && perUser[u.id][p.id]) || 0),
+    backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+    stack: 'load',
+    borderWidth: 0,
+    categoryPercentage: 0.8,
+    barPercentage: 0.92,
+    maxBarThickness: horiz ? 38 : 64,
+  }));
+
+  const btn = document.getElementById('peopleLoadViewBtn');
+  if (btn) btn.textContent = horiz ? '↕ Column view' : '↔ Bar view';
+
   if (chartPersonLoadInstance) { chartPersonLoadInstance.destroy(); chartPersonLoadInstance = null; }
   const ctx = document.getElementById('chartPersonLoad');
-  if (ctx) {
-    const target = Number(state.settings.hours_per_week_target) || 40;
-    chartPersonLoadInstance = new Chart(ctx, {
-      type: 'bar',
-      data: { labels, datasets: [{
-        label: 'Actual hours (last 4 weeks)',
-        data,
-        backgroundColor: data.map(v => v > target * 4 * 1.15 ? '#E74C3C' : v < target * 4 * 0.6 ? '#F39C12' : '#003EFF'),
-      }] },
-      options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Hours' } } } }
-    });
-  }
+  if (!ctx) return;
+  const container = ctx.parentElement;
+  if (container) container.style.height = horiz ? Math.max(320, users.length * 48 + 90) + 'px' : '420px';
 
-  renderPeopleBreakdown();
+  chartPersonLoadInstance = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      indexAxis: horiz ? 'y' : 'x',
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: horiz ? 'top' : 'right', labels: { font: { family: 'Montserrat', size: 11 }, boxWidth: 12 } },
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtHours(c.parsed[horiz ? 'x' : 'y'])}` } }
+      },
+      scales: {
+        x: { stacked: true, beginAtZero: true, title: horiz ? { display: true, text: 'Hours' } : { display: false } },
+        y: { stacked: true, beginAtZero: true, title: horiz ? { display: false } : { display: true, text: 'Hours' } }
+      }
+    }
+  });
 }
 
 // ── By Person: hours split across projects/deals ─────────────
