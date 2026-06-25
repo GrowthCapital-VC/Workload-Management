@@ -487,15 +487,9 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
               <label>Person</label>
               <select class="gc-select" id="peopleBreakdownUser" onchange="renderPeopleBreakdown()"></select>
             </div>
-            <div class="gc-form-group" style="margin-bottom:0; min-width:170px;">
+            <div class="gc-form-group" style="margin-bottom:0; min-width:220px;">
               <label>Period</label>
-              <select class="gc-select" id="peopleBreakdownRange" onchange="renderPeopleBreakdown()">
-                <option value="1">Last week</option>
-                <option value="4" selected>Last 4 weeks</option>
-                <option value="8">Last 8 weeks</option>
-                <option value="13">Last 13 weeks</option>
-                <option value="26">Last 26 weeks</option>
-              </select>
+              <select class="gc-select" id="peopleBreakdownRange" onchange="renderPeopleBreakdown()"></select>
             </div>
             <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="exportPeopleBreakdown()">↓ Excel</button>
           </div>
@@ -510,15 +504,17 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
             <div class="gc-card-sub" id="peopleLoadSub">Actual hours split by Deals vs Projects</div>
           </div>
           <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
-            <div class="gc-form-group" style="margin-bottom:0; min-width:160px;">
-              <label>Period</label>
-              <select class="gc-select" id="peopleLoadRange" onchange="renderPeopleLoadChart()">
-                <option value="1">Latest week</option>
-                <option value="4" selected>Last 4 weeks</option>
-                <option value="8">Last 8 weeks</option>
-                <option value="13">Last 13 weeks</option>
-                <option value="26">Last 26 weeks</option>
+            <div class="gc-form-group" style="margin-bottom:0; min-width:140px;">
+              <label>Show</label>
+              <select class="gc-select" id="peopleLoadMetric" onchange="renderPeopleLoadChart()">
+                <option value="actual" selected>Actual</option>
+                <option value="forecast">Forecast</option>
+                <option value="both">Actual & forecast</option>
               </select>
+            </div>
+            <div class="gc-form-group" style="margin-bottom:0; min-width:220px;">
+              <label>Period</label>
+              <select class="gc-select" id="peopleLoadRange" onchange="renderPeopleLoadChart()"></select>
             </div>
             <button class="gc-btn gc-btn-ghost gc-btn-sm" id="peopleLoadViewBtn" onclick="togglePeopleLoadView()">↔ Bar view</button>
           </div>
@@ -1684,85 +1680,108 @@ function renderPeopleMatrix() {
   renderPeopleBreakdown();
 }
 
-// "Workload by person" — actual hours stacked by TYPE (Deals vs Projects),
-// over a selectable period, with per-user totals and a per-project tooltip.
+// Shared period helpers: a <select> offers ranges AND single weeks (proper names).
+function periodWeeks(value) {
+  if (value && value.indexOf('w:') === 0) return [value.slice(2)];
+  const n = (value && value.indexOf('r:') === 0) ? parseInt(value.slice(2), 10) : (parseInt(value, 10) || 4);
+  return lastNMondays(n);
+}
+function populatePeriodSelect(sel, selected) {
+  if (!sel) return;
+  const weeks = lastNMondays(26).slice().reverse(); // newest first
+  const ranges = [4, 8, 13, 26].map(n => `<option value="r:${n}">Last ${n} weeks</option>`).join('');
+  const singles = weeks.map(w => `<option value="w:${w}">W${isoWeekNumber(parseYmd(w))} · ${fmtWeekRange(w)}</option>`).join('');
+  sel.innerHTML = `<optgroup label="Ranges">${ranges}</optgroup><optgroup label="Single week">${singles}</optgroup>`;
+  sel.value = selected || 'r:4';
+}
+function periodLabel(weeks) {
+  if (weeks.length === 1) return 'Week of ' + fmtWeekRange(weeks[0]);
+  return `${fmtWeekShort(weeks[0])} → ${fmtWeekRange(weeks[weeks.length - 1])}`;
+}
+
+// "Workload by person" — hours stacked by TYPE (Deals vs Projects) over a
+// selectable period (range or single week), for Actual / Forecast / Both.
 const DEAL_COLOR = '#003EFF';      // matches the Deal badge
 const PROJECT_COLOR = '#C4F222';   // matches the Project badge
+const DEAL_COLOR_F = 'rgba(0,62,255,0.40)';     // forecast = lighter
+const PROJECT_COLOR_F = 'rgba(150,190,20,0.55)';
 let peopleLoadHorizontal = false;
 function togglePeopleLoadView() {
   peopleLoadHorizontal = !peopleLoadHorizontal;
   renderPeopleLoadChart();
 }
-function peopleLoadPeriodLabel(weeks) {
-  if (weeks.length === 1) return 'Week of ' + fmtWeekRange(weeks[0]);
-  return `${fmtWeekShort(weeks[0])} → ${fmtWeekRange(weeks[weeks.length - 1])}`;
-}
 function renderPeopleLoadChart() {
   const horiz = peopleLoadHorizontal;
   const rangeSel = document.getElementById('peopleLoadRange');
-  const n = rangeSel ? (parseInt(rangeSel.value, 10) || 4) : 4;
-  const weeks = lastNMondays(n);                 // oldest → newest
+  if (rangeSel && !rangeSel.options.length) populatePeriodSelect(rangeSel, 'r:4');
+  const metric = (document.getElementById('peopleLoadMetric') || {}).value || 'actual';
+  const weeks = periodWeeks(rangeSel ? rangeSel.value : 'r:4');
   const weekSet = new Set(weeks);
   const users = [...state.users].filter(x => (x.status || 'approved') === 'approved').sort((a,b)=>a.name.localeCompare(b.name));
-
-  const sub = document.getElementById('peopleLoadSub');
-  if (sub) sub.textContent = `Actual hours · ${peopleLoadPeriodLabel(weeks)}`;
-
-  // Per-user, per-project actual hours over the period.
-  const perUser = {};
-  state.records.filter(r => r.type === 'actual' && weekSet.has(r.week_start)).forEach(r => {
-    if (!perUser[r.user_id]) perUser[r.user_id] = {};
-    r.entries.forEach(e => { perUser[r.user_id][e.project_id] = (perUser[r.user_id][e.project_id] || 0) + (Number(e.hours) || 0); });
-  });
   const projType = {}; state.projects.forEach(p => { projType[p.id] = (p.type === 'Deal') ? 'Deal' : 'Project'; });
 
-  // Aggregate per user into Deal vs Project totals; keep per-project detail for tooltips.
-  const dealData = [], projData = [], perUserBreakdown = {};
-  users.forEach(u => {
-    let dealH = 0, projH = 0; const det = [];
-    const m = perUser[u.id] || {};
-    Object.entries(m).forEach(([pid, h]) => {
-      const p = state.projects.find(x => x.id === pid);
-      const t = projType[pid] || 'Project';
-      if (t === 'Deal') dealH += h; else projH += h;
-      det.push({ name: p ? p.name : '(deleted)', type: t, hours: h });
-    });
-    dealData.push(dealH); projData.push(projH);
-    perUserBreakdown[u.id] = det.sort((a,b)=>b.hours-a.hours);
-  });
+  const metricLabel = metric === 'forecast' ? 'Forecast hours' : metric === 'both' ? 'Actual & forecast' : 'Actual hours';
+  const sub = document.getElementById('peopleLoadSub');
+  if (sub) sub.textContent = `${metricLabel} · ${periodLabel(weeks)}`;
 
+  // Per-user Deal/Project totals + per-project detail, for a record type.
+  function build(recType) {
+    const pu = {}, det = {};
+    state.records.filter(r => r.type === recType && weekSet.has(r.week_start)).forEach(r => {
+      if (!pu[r.user_id]) pu[r.user_id] = { Deal: 0, Project: 0 };
+      if (!det[r.user_id]) det[r.user_id] = {};
+      r.entries.forEach(e => {
+        const t = projType[e.project_id] || 'Project';
+        const h = Number(e.hours) || 0;
+        pu[r.user_id][t] += h;
+        if (!det[r.user_id][e.project_id]) {
+          const p = state.projects.find(x => x.id === e.project_id);
+          det[r.user_id][e.project_id] = { name: p ? p.name : '(deleted)', type: t, hours: 0 };
+        }
+        det[r.user_id][e.project_id].hours += h;
+      });
+    });
+    return { pu, det };
+  }
+  const A = build('actual'), F = build('forecast');
   const labels = users.map(u => u.name);
-  const dsCommon = { stack: 'load', borderColor: '#fff', borderWidth: 1, categoryPercentage: 0.82, barPercentage: 0.94, maxBarThickness: horiz ? 40 : 70 };
-  const datasets = [
-    { label: 'Deals', data: dealData, backgroundColor: DEAL_COLOR, ...dsCommon },
-    { label: 'Projects', data: projData, backgroundColor: PROJECT_COLOR, ...dsCommon },
-  ];
+  const col = (src, t) => users.map(u => (src.pu[u.id] && src.pu[u.id][t]) || 0);
+  const dsCommon = { borderColor: '#fff', borderWidth: 1, categoryPercentage: 0.82, barPercentage: 0.94, maxBarThickness: horiz ? 40 : 70 };
+
+  const datasets = [];
+  if (metric === 'actual' || metric === 'both') {
+    datasets.push({ label: metric === 'both' ? 'Deals · actual' : 'Deals', data: col(A, 'Deal'), backgroundColor: DEAL_COLOR, stack: 'actual', ...dsCommon });
+    datasets.push({ label: metric === 'both' ? 'Projects · actual' : 'Projects', data: col(A, 'Project'), backgroundColor: PROJECT_COLOR, stack: 'actual', ...dsCommon });
+  }
+  if (metric === 'forecast' || metric === 'both') {
+    datasets.push({ label: metric === 'both' ? 'Deals · forecast' : 'Deals', data: col(F, 'Deal'), backgroundColor: metric === 'both' ? DEAL_COLOR_F : DEAL_COLOR, stack: 'forecast', ...dsCommon });
+    datasets.push({ label: metric === 'both' ? 'Projects · forecast' : 'Projects', data: col(F, 'Project'), backgroundColor: metric === 'both' ? PROJECT_COLOR_F : PROJECT_COLOR, stack: 'forecast', ...dsCommon });
+  }
 
   const btn = document.getElementById('peopleLoadViewBtn');
   if (btn) btn.textContent = horiz ? '↕ Column view' : '↔ Bar view';
 
-  // Plugin: draw each person's total at the end of their bar.
+  // Draw each stack's total at the end of its bar.
   const totalsPlugin = {
     id: 'peopleLoadTotals',
     afterDatasetsDraw(chart) {
       const { ctx, scales } = chart;
       const valueScale = horiz ? scales.x : scales.y;
-      const meta = chart.getDatasetMeta(chart.data.datasets.length - 1);
+      const groups = {};
+      chart.data.datasets.forEach((d, di) => { (groups[d.stack || '_'] = groups[d.stack || '_'] || []).push(di); });
       ctx.save();
-      ctx.font = '700 11px Montserrat, sans-serif';
+      ctx.font = '700 10px Montserrat, sans-serif';
       ctx.fillStyle = '#1a1a2e';
-      for (let i = 0; i < labels.length; i++) {
-        const total = (dealData[i] || 0) + (projData[i] || 0);
-        const bar = meta.data[i];
-        if (total <= 0 || !bar) continue;
-        if (horiz) {
-          ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-          ctx.fillText(fmtHours(total), valueScale.getPixelForValue(total) + 6, bar.y);
-        } else {
-          ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-          ctx.fillText(fmtHours(total), bar.x, valueScale.getPixelForValue(total) - 6);
+      Object.values(groups).forEach(idxs => {
+        const meta = chart.getDatasetMeta(idxs[idxs.length - 1]);
+        for (let i = 0; i < labels.length; i++) {
+          const total = idxs.reduce((s, di) => s + (Number(chart.data.datasets[di].data[i]) || 0), 0);
+          const bar = meta.data[i];
+          if (total <= 0 || !bar) continue;
+          if (horiz) { ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(fmtHours(total), valueScale.getPixelForValue(total) + 5, bar.y); }
+          else { ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(fmtHours(total), bar.x, valueScale.getPixelForValue(total) - 4); }
         }
-      }
+      });
       ctx.restore();
     }
   };
@@ -1780,7 +1799,7 @@ function renderPeopleLoadChart() {
     options: {
       indexAxis: horiz ? 'y' : 'x',
       responsive: true, maintainAspectRatio: false,
-      layout: { padding: { right: horiz ? 48 : 8, top: horiz ? 8 : 20 } },
+      layout: { padding: { right: horiz ? 52 : 8, top: horiz ? 8 : 20 } },
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { position: horiz ? 'top' : 'right', labels: { font: { family: 'Montserrat', size: 11 }, boxWidth: 12 } },
@@ -1789,9 +1808,15 @@ function renderPeopleLoadChart() {
           afterBody: (items) => {
             if (!items.length) return '';
             const u = users[items[0].dataIndex];
-            const det = (perUserBreakdown[u.id] || []).filter(d => d.hours > 0);
-            if (!det.length) return '';
-            return ['', ...det.map(d => `• ${d.name} (${d.type}): ${fmtHours(d.hours)}`)];
+            const lines = [];
+            const addDet = (src, title) => {
+              const arr = Object.values(src.det[u.id] || {}).filter(d => d.hours > 0).sort((a,b)=>b.hours-a.hours);
+              if (arr.length) { lines.push('', title + ':'); arr.forEach(d => lines.push(`• ${d.name} (${d.type}): ${fmtHours(d.hours)}`)); }
+            };
+            if (metric === 'forecast') addDet(F, 'Forecast');
+            else if (metric === 'both') { addDet(A, 'Actual'); addDet(F, 'Forecast'); }
+            else addDet(A, 'Actual');
+            return lines;
           }
         } }
       },
@@ -1806,8 +1831,8 @@ function renderPeopleLoadChart() {
 // ── By Person: hours split across projects/deals ─────────────
 function peopleBreakdownData() {
   const userSel = document.getElementById('peopleBreakdownUser');
-  const n = parseInt(document.getElementById('peopleBreakdownRange').value, 10) || 4;
-  const weeks = new Set(lastNMondays(n));
+  const rangeSel = document.getElementById('peopleBreakdownRange');
+  const weeks = new Set(periodWeeks(rangeSel ? rangeSel.value : 'r:4'));
   const userId = userSel.value || '__all';
   const recs = state.records.filter(r => r.type === 'actual' && weeks.has(r.week_start)
     && (userId === '__all' || r.user_id === userId));
@@ -1826,12 +1851,14 @@ function peopleBreakdownData() {
   }).filter(r => r.actual > 0 || r.forecast > 0)
     .sort((a,b) => (a.order - b.order) || a.name.localeCompare(b.name));
   const totalA = rows.reduce((s,r)=>s+r.actual,0);
-  return { rows, totalA, userId, n };
+  return { rows, totalA, userId };
 }
 
 function renderPeopleBreakdown() {
   const sel = document.getElementById('peopleBreakdownUser');
   if (!sel) return;
+  const rangeSel = document.getElementById('peopleBreakdownRange');
+  if (rangeSel && !rangeSel.options.length) populatePeriodSelect(rangeSel, 'r:4');
   const users = [...state.users].filter(x => (x.status || 'approved') === 'approved').sort((a,b)=>a.name.localeCompare(b.name));
   if (sel.options.length !== users.length + 1) {
     const cur = sel.value;
@@ -1966,7 +1993,6 @@ function renderProjects() {
   const archived = [...state.projects.filter(p => p.status === 'archived')].sort((a,b)=>a.name.localeCompare(b.name));
   const all = [...active, ...archived];
   const rows = all.map((p, idx) => {
-    const used = state.records.some(r => r.entries.some(e => e.project_id === p.id));
     const draggable = p.status === 'active';
     return `<tr ${draggable?`draggable="true" data-pid="${p.id}"`:''}>
       <td class="c" style="width:30px;">${draggable?'<span class="drag-handle" title="Drag to reorder">⋮⋮</span>':''}</td>
@@ -1978,7 +2004,8 @@ function renderProjects() {
       <td class="r">
         <div class="gc-row-actions">
           <button class="gc-icon-btn" title="Edit" onclick="openProjectModal('${p.id}')">✎</button>
-          ${used ? `<button class="gc-icon-btn" title="Toggle active/archived" onclick="toggleProjectStatus('${p.id}')">↻</button>` : `<button class="gc-icon-btn danger" title="Delete" onclick="deleteProject('${p.id}')">×</button>`}
+          <button class="gc-icon-btn" title="${p.status==='active'?'Archive':'Restore (unarchive)'}" onclick="toggleProjectStatus('${p.id}')">↻</button>
+          <button class="gc-icon-btn danger" title="Delete permanently" onclick="deleteProject('${p.id}')">×</button>
         </div>
       </td>
     </tr>`;
@@ -2088,11 +2115,19 @@ function toggleProjectStatus(id) {
   saveProjects();
   renderProjects();
 }
-function deleteProject(id) {
-  if (!confirm("Permanently delete this item? This action cannot be undone (consider archiving instead).")) return;
+async function deleteProject(id) {
+  const p = state.projects.find(x => x.id === id);
+  if (!p) return;
+  const used = state.records.some(r => r.entries.some(e => e.project_id === id));
+  const msg = used
+    ? `Permanently delete “${p.name}”?\n\nIt has logged hours. Past submissions keep those hours but will show the item as “(deleted)” in History and dashboards. This cannot be undone — consider archiving instead.`
+    : `Permanently delete “${p.name}”? This cannot be undone.`;
+  if (!confirm(msg)) return;
+  const { error } = await sb.from('projects').delete().eq('id', id);
+  if (error) { alert('Could not delete: ' + error.message); return; }
   state.projects = state.projects.filter(x => x.id !== id);
-  saveProjects();
   renderProjects();
+  flashNotice('Item deleted.');
 }
 
 // =========================================================
