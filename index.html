@@ -570,6 +570,16 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         </div>
         <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="projectsTable"></table></div>
       </div>
+
+      <div class="gc-card" id="archivedCard" style="display:none;">
+        <div class="gc-card-header">
+          <div>
+            <span class="gc-card-title">Archived Items <span class="gc-pill" id="archivedCount">0</span></span>
+            <div class="gc-card-sub">Hidden from submissions — restore (↻) to make them selectable again</div>
+          </div>
+        </div>
+        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="archivedTable"></table></div>
+      </div>
     </section>
 
     <!-- ============ TEAM / SETTINGS (PL) ============ -->
@@ -1989,34 +1999,48 @@ function renderVariance() {
 // =========================================================
 // PROJECTS (PL) — with drag-and-drop ordering
 // =========================================================
+function projectRowHtml(p) {
+  const draggable = p.status === 'active';
+  return `<tr ${draggable?`draggable="true" data-pid="${p.id}"`:''}>
+    <td class="c" style="width:30px;">${draggable?'<span class="drag-handle" title="Drag to reorder">⋮⋮</span>':''}</td>
+    <td>${projectTypeBadge(p.type || 'Project')}</td>
+    <td class="m">${escapeHtml(p.name)}</td>
+    <td>${p.code?`<span class="gc-badge gc-badge-gray">${escapeHtml(p.code)}</span>`:'—'}</td>
+    <td><span class="gc-badge ${p.status==='active'?'gc-badge-green':'gc-badge-gray'}">${p.status==='active'?'Active':'Archived'}</span></td>
+    <td>${fmtDate(p.created_at)}</td>
+    <td class="r">
+      <div class="gc-row-actions">
+        <button class="gc-icon-btn" title="Edit" onclick="openProjectModal('${p.id}')">✎</button>
+        <button class="gc-icon-btn" title="${p.status==='active'?'Archive':'Restore (unarchive)'}" onclick="toggleProjectStatus('${p.id}')">↻</button>
+        <button class="gc-icon-btn danger" title="Delete permanently" onclick="deleteProject('${p.id}')">×</button>
+      </div>
+    </td>
+  </tr>`;
+}
 function renderProjects() {
-  const tbl = document.getElementById('projectsTable');
-  // Show active items first (sorted by their order), then archived (sorted by name)
+  const header = `<thead><tr><th></th><th>Type</th><th>Name</th><th>Code</th><th>Status</th><th>Created</th><th class="r">Actions</th></tr></thead>`;
   const active = sortedProjects(state.projects.filter(p => p.status === 'active'));
   const archived = [...state.projects.filter(p => p.status === 'archived')].sort((a,b)=>a.name.localeCompare(b.name));
-  const all = [...active, ...archived];
-  const rows = all.map((p, idx) => {
-    const draggable = p.status === 'active';
-    return `<tr ${draggable?`draggable="true" data-pid="${p.id}"`:''}>
-      <td class="c" style="width:30px;">${draggable?'<span class="drag-handle" title="Drag to reorder">⋮⋮</span>':''}</td>
-      <td>${projectTypeBadge(p.type || 'Project')}</td>
-      <td class="m">${escapeHtml(p.name)}</td>
-      <td>${p.code?`<span class="gc-badge gc-badge-gray">${escapeHtml(p.code)}</span>`:'—'}</td>
-      <td><span class="gc-badge ${p.status==='active'?'gc-badge-green':'gc-badge-gray'}">${p.status==='active'?'Active':'Archived'}</span></td>
-      <td>${fmtDate(p.created_at)}</td>
-      <td class="r">
-        <div class="gc-row-actions">
-          <button class="gc-icon-btn" title="Edit" onclick="openProjectModal('${p.id}')">✎</button>
-          <button class="gc-icon-btn" title="${p.status==='active'?'Archive':'Restore (unarchive)'}" onclick="toggleProjectStatus('${p.id}')">↻</button>
-          <button class="gc-icon-btn danger" title="Delete permanently" onclick="deleteProject('${p.id}')">×</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
-  tbl.innerHTML = `
-    <thead><tr><th></th><th>Type</th><th>Name</th><th>Code</th><th>Status</th><th>Created</th><th class="r">Actions</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="7" class="gc-empty">No projects yet.</td></tr>'}</tbody>
+
+  document.getElementById('projectsTable').innerHTML = `
+    ${header}
+    <tbody>${active.map(projectRowHtml).join('') || '<tr><td colspan="7" class="gc-empty">No active items yet.</td></tr>'}</tbody>
   `;
+
+  const archCard = document.getElementById('archivedCard');
+  if (archCard) {
+    if (archived.length === 0) {
+      archCard.style.display = 'none';
+    } else {
+      archCard.style.display = '';
+      const cnt = document.getElementById('archivedCount');
+      if (cnt) cnt.textContent = archived.length;
+      document.getElementById('archivedTable').innerHTML = `
+        ${header}
+        <tbody>${archived.map(projectRowHtml).join('')}</tbody>
+      `;
+    }
+  }
   attachProjectDnD();
 }
 
