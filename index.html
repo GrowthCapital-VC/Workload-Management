@@ -601,7 +601,6 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
               <span class="gc-card-title">Team</span>
               <div class="gc-card-sub">Registered users and roles</div>
             </div>
-            <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="openInviteModal()">+ Invite</button>
           </div>
           <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="usersTable"></table></div>
         </div>
@@ -615,9 +614,9 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
           </div>
           <div class="gc-card-body">
             <div class="gc-form-group">
-              <label>Analyst edit window (days)</label>
+              <label>GC User edit window (days)</label>
               <input type="number" class="gc-input" id="settingsEditWindow" min="0" max="365" step="1">
-              <div style="font-size:11px; color:var(--gc-gray-60); margin-top:6px;">How many days an Analyst can edit their own submission. After that, only PLs can correct it.</div>
+              <div style="font-size:11px; color:var(--gc-gray-60); margin-top:6px;">How many days a GC User can edit their own submission. After that, only PLs can correct it.</div>
             </div>
             <div class="gc-form-group">
               <label>Weekly hours target</label>
@@ -691,43 +690,6 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
   </div>
 </div>
 
-<div class="gc-modal-overlay" id="inviteModal">
-  <div class="gc-modal">
-    <div class="gc-modal-header">
-      <span class="gc-modal-title">Invite a colleague</span>
-      <button class="gc-modal-close" onclick="closeModal('inviteModal')">×</button>
-    </div>
-    <div class="gc-modal-body">
-      <div class="notice notice-info" style="margin-bottom:14px;">
-        In mock mode, the invite directly creates the account with the temporary password you set. Share the credentials with your colleague; they'll be able to change the password later (once we integrate Supabase).
-      </div>
-      <div class="gc-form-group">
-        <label>Full name</label>
-        <input type="text" class="gc-input" id="im_name">
-      </div>
-      <div class="gc-form-group">
-        <label>Email</label>
-        <input type="email" class="gc-input" id="im_email">
-      </div>
-      <div class="gc-form-group">
-        <label>Temporary password</label>
-        <input type="text" class="gc-input" id="im_password" placeholder="min 6 characters">
-      </div>
-      <div class="gc-form-group">
-        <label>Role</label>
-        <select class="gc-select" id="im_role">
-          <option value="Analyst">Analyst</option>
-          <option value="PL">PL</option>
-          <option value="Admin">Admin</option>
-        </select>
-      </div>
-    </div>
-    <div class="gc-modal-footer">
-      <button class="gc-btn gc-btn-secondary" style="color:var(--gc-gray-40)" onclick="closeModal('inviteModal')">Cancel</button>
-      <button class="gc-btn gc-btn-primary" onclick="saveInvite()">Create account</button>
-    </div>
-  </div>
-</div>
 
 <div class="gc-modal-overlay" id="editRecordModal">
   <div class="gc-modal" style="width:700px;">
@@ -835,7 +797,12 @@ function saveRecord(rec) {
 }
 
 function saveSettingsState() {
-  sb.from('settings').upsert({ id: 1, ...state.settings }).then(({ error }) => { if (error) console.error('saveSettings:', error); });
+  sb.from('settings').update({
+    edit_window_days: state.settings.edit_window_days,
+    hours_per_week_target: state.settings.hours_per_week_target
+  }).eq('id', 1).then(({ error }) => {
+    if (error) { console.error('saveSettings:', error); alert('Could not save settings: ' + error.message); }
+  });
 }
 
 function saveSession() { /* session managed by Supabase Auth */ }
@@ -962,7 +929,7 @@ async function doSignup() {
   // If a session is created (email confirmation off), onAuthStateChange routes
   // the user to the pending screen. Otherwise show the login info message.
   showLogin();
-  showAuthInfo('loginInfo', 'Account created! Confirm your email via the link we just sent you, then a Team Lead will review your access before you can sign in.');
+  showAuthInfo('loginInfo', 'Account created! A Team Lead must approve your access before you can sign in — you’ll see a “waiting for approval” screen until then.');
 }
 async function doLogout() {
   await sb.auth.signOut();
@@ -971,10 +938,12 @@ async function doLogout() {
 function currentUser() {
   return state.currentUser || null;
 }
-// Role helpers — Admin inherits every PL capability (Analyst < PL < Admin).
+// Role helpers — Admin inherits every PL capability (GC User < PL < Admin).
+// NB: the role is stored as 'Analyst' in the DB; we only relabel it for display.
 function isPL(u) { u = u || currentUser(); return !!u && (u.role === 'PL' || u.role === 'Admin'); }
 function isAdmin(u) { u = u || currentUser(); return !!u && u.role === 'Admin'; }
 function roleBadgeClass(role) { return role === 'Admin' ? 'gc-badge-green' : role === 'PL' ? 'gc-badge-blue' : 'gc-badge-gray'; }
+function roleLabel(role) { return role === 'Analyst' ? 'GC User' : role; }
 // Week-lock helpers — a closed week cannot be edited by anyone until reopened.
 function isWeekClosed(week) { return state.closedWeeks instanceof Set && state.closedWeeks.has(week); }
 
@@ -998,7 +967,7 @@ async function enterApp() {
   document.getElementById('authView').classList.add('hide');
   document.getElementById('appView').classList.remove('hide');
   document.getElementById('hdrUserName').textContent = u.name;
-  document.getElementById('hdrUserRole').textContent = u.role;
+  document.getElementById('hdrUserRole').textContent = roleLabel(u.role);
   buildTabs();
   hydrateSettingsInputs();
   renderActiveSection();
@@ -1270,7 +1239,7 @@ function renderHistory() {
     if (sel.options.length !== state.users.length + 1) {
       const current = sel.value;
       sel.innerHTML = '<option value="__me">Only me (' + escapeHtml(u.name) + ')</option>' +
-        [...state.users].sort((a,b)=>a.name.localeCompare(b.name)).map(x => `<option value="${x.id}">${escapeHtml(x.name)} — ${x.role}</option>`).join('');
+        [...state.users].sort((a,b)=>a.name.localeCompare(b.name)).map(x => `<option value="${x.id}">${escapeHtml(x.name)} — ${roleLabel(x.role)}</option>`).join('');
       sel.value = current || '__me';
     }
   } else {
@@ -1681,7 +1650,7 @@ function renderPeopleMatrix() {
     }).join('');
     return `<tr>
       <td class="m">${escapeHtml(u.name)}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
-      <td><span class="gc-badge ${roleBadgeClass(u.role)}">${u.role}</span></td>
+      <td><span class="gc-badge ${roleBadgeClass(u.role)}">${roleLabel(u.role)}</span></td>
       ${cells}
       <td class="r m">${fmtHours(totA)}</td>
     </tr>`;
@@ -2207,7 +2176,7 @@ function renderSettings() {
       <td class="m">${escapeHtml(u.name)} ${isMe?'<span style="font-size:11px;color:var(--gc-gray-60);">(you)</span>':''}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
       <td>
         <select class="gc-select small" style="font-size:12px;padding:4px 8px;" ${isMe?'disabled':''} onchange="changeUserRole('${u.id}', this.value)">
-          <option value="Analyst" ${u.role==='Analyst'?'selected':''}>Analyst</option>
+          <option value="Analyst" ${u.role==='Analyst'?'selected':''}>GC User</option>
           <option value="PL" ${u.role==='PL'?'selected':''}>PL</option>
           <option value="Admin" ${u.role==='Admin'?'selected':''}>Admin</option>
         </select>
@@ -2309,7 +2278,7 @@ async function changeUserRole(id, role) {
   } else if (role === 'PL') {
     verb = `Set ${u.name} as PL?\n\nPLs can manage projects, edit anyone's records, change settings, and add/remove users.`;
   } else {
-    verb = `Downgrade ${u.name} to Analyst?\n\nThey will lose access to the dashboards, projects and team management.`;
+    verb = `Downgrade ${u.name} to GC User?\n\nThey will lose access to the dashboards, projects and team management.`;
   }
   if (!confirm(verb)) { renderSettings(); return; }
   const { error } = await sb.from('profiles').update({ role }).eq('id', id);
@@ -2323,7 +2292,7 @@ async function changeUserRole(id, role) {
   if (profiles) state.users = profiles;
   else u.role = role;
   renderSettings();
-  flashNotice(`${u.name} is now ${role}.`);
+  flashNotice(`${u.name} is now ${roleLabel(role)}.`);
 }
 async function resetUserPassword(id) {
   const u = state.users.find(x => x.id === id);
@@ -2342,35 +2311,6 @@ async function deleteUser(id) {
   renderSettings();
   flashNotice('User removed.');
 }
-function openInviteModal() {
-  document.getElementById('im_name').value = '';
-  document.getElementById('im_email').value = '';
-  document.getElementById('im_password').value = '';
-  document.getElementById('im_role').value = 'Analyst';
-  openModal('inviteModal');
-}
-async function saveInvite() {
-  const name  = document.getElementById('im_name').value.trim();
-  const email = document.getElementById('im_email').value.trim().toLowerCase();
-  const pw    = document.getElementById('im_password').value;
-  const role  = document.getElementById('im_role').value;
-  if (!name || !email || pw.length < 6) { alert('Please fill all fields (password ≥ 6 characters).'); return; }
-  if (!/@growthcapital\.vc$/.test(email)) { alert('Email must be a @growthcapital.vc address.'); return; }
-  // signUp with email confirmation enabled does NOT sign out the current PL
-  const { data, error } = await sb.auth.signUp({ email, password: pw, options: { data: { name } } });
-  if (error) { alert('Could not create account: ' + error.message); return; }
-  // PL-invited users are vouched for → auto-approved, and given the chosen role.
-  if (data.user) {
-    await sb.from('profiles').update({ role, status: 'approved' }).eq('id', data.user.id);
-  }
-  // Refresh the profiles list
-  const { data: profiles } = await sb.from('profiles').select('*');
-  state.users = profiles || [];
-  closeModal('inviteModal');
-  renderSettings();
-  flashNotice('User created.');
-}
-
 // =========================================================
 // EXPORT
 // =========================================================
@@ -2397,7 +2337,7 @@ function exportPeopleMatrix() {
   const header = ['Person','Email','Role', ...weeks.flatMap(w => [`${fmtWeekShort(w)} A`, `${fmtWeekShort(w)} F`])];
   const data = [header];
   [...state.users].sort((a,b)=>a.name.localeCompare(b.name)).forEach(u => {
-    const row = [u.name, u.email, u.role];
+    const row = [u.name, u.email, roleLabel(u.role)];
     weeks.forEach(w => {
       const a = state.records.find(r => r.user_id===u.id && r.week_start===w && r.type==='actual');
       const f = state.records.find(r => r.user_id===u.id && r.week_start===w && r.type==='forecast');
@@ -2485,7 +2425,10 @@ function importAllJSON(ev) {
       }
       if (obj.settings) {
         state.settings = Object.assign({}, DEFAULT_SETTINGS, obj.settings);
-        await sb.from('settings').upsert({ id: 1, ...state.settings });
+        await sb.from('settings').update({
+          edit_window_days: state.settings.edit_window_days,
+          hours_per_week_target: state.settings.hours_per_week_target
+        }).eq('id', 1);
       }
       flashNotice('Backup imported.');
       enterApp();
@@ -2499,7 +2442,7 @@ async function clearAllData() {
   await Promise.all([
     sb.from('records').delete().not('id', 'is', null),
     sb.from('projects').delete().not('id', 'is', null),
-    sb.from('settings').upsert({ id: 1, edit_window_days: 14, hours_per_week_target: 40 }),
+    sb.from('settings').update({ edit_window_days: 14, hours_per_week_target: 40 }).eq('id', 1),
   ]);
   await sb.auth.signOut();
   location.reload();
