@@ -190,8 +190,11 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
 .week-banner .week-sub { font-size:11px; color:var(--gc-gray-60); text-transform:uppercase; letter-spacing:1px; }
 .gc-pill { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; background:var(--gc-offwhite); border:1px solid var(--gc-gray-90); border-radius:999px; font-size:11px; font-weight:600; color:var(--gc-gray-40); }
 
-.submit-grid { display:grid; grid-template-columns: 1fr 1fr; gap:20px; }
+.submit-grid { display:grid; grid-template-columns: 1fr 1fr; gap:20px; position:relative; }
 @media (max-width:900px){ .submit-grid { grid-template-columns:1fr; } }
+.copy-arrow { position:absolute; left:50%; top:28px; transform:translate(-50%,-50%); z-index:5; width:36px; height:36px; border-radius:50%; border:1px solid var(--gc-gray-90); background:white; color:var(--gc-gray-10); font-size:17px; font-weight:700; line-height:1; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.15); display:flex; align-items:center; justify-content:center; transition:background .15s,transform .15s; }
+.copy-arrow:hover { background:var(--gc-lime); transform:translate(-50%,-50%) scale(1.08); }
+@media (max-width:900px){ .copy-arrow { position:static; transform:none; margin:6px auto; } .copy-arrow:hover { transform:scale(1.08); } }
 .submit-col { background:white; border:1px solid var(--gc-gray-90); border-radius:var(--radius); overflow:hidden; }
 .submit-col.actual .submit-col-head { background:#EAF4FE; color:#1F4E8C; }
 .submit-col.forecast .submit-col-head { background:#EDFBBD; color:#3E4C0A; }
@@ -348,6 +351,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
       <div id="carryNotice"></div>
 
       <div class="submit-grid">
+        <button type="button" class="copy-arrow" id="copyAtoF" onclick="copyActualToForecast()" title="Copy all Actual hours into Forecast as a starting point for next week" aria-label="Copy Actual hours into Forecast">→</button>
         <div class="submit-col actual">
           <div class="submit-col-head">
             <div class="ttl">Actual</div>
@@ -421,19 +425,13 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
       <div class="gc-controls-panel">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px;">
           <div>
-            <div class="gc-cp-title">Team Dashboard</div>
-            <div class="gc-cp-sub">Aggregated view across the team</div>
+            <div class="gc-cp-title" id="dashTitle">Team Dashboard</div>
+            <div class="gc-cp-sub" id="dashSub">Aggregated view across the team</div>
           </div>
           <div style="display:flex; gap:12px; align-items:flex-end;">
-            <div class="gc-form-group" style="margin-bottom:0; min-width:200px;">
-              <label>Range</label>
-              <select class="gc-select" id="dashRange" onchange="renderDashboard()">
-                <option value="4">Last 4 weeks</option>
-                <option value="8">Last 8 weeks</option>
-                <option value="13" selected>Last 13 weeks</option>
-                <option value="26">Last 26 weeks</option>
-                <option value="52">Last 52 weeks</option>
-              </select>
+            <div class="gc-form-group" style="margin-bottom:0; min-width:220px;">
+              <label>Range (charts &amp; table)</label>
+              <select class="gc-select" id="dashRange" onchange="renderDashboard()"></select>
             </div>
           </div>
         </div>
@@ -447,7 +445,24 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
           <div class="gc-card-body"><div class="gc-chart-container"><canvas id="chartByProject"></canvas></div></div>
         </div>
         <div class="gc-card">
-          <div class="gc-card-header"><span class="gc-card-title">Weekly trend</span></div>
+          <div class="gc-card-header" style="flex-wrap:wrap; gap:8px;">
+            <span class="gc-card-title">Weekly trend</span>
+            <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+              <div class="gc-form-group" style="margin-bottom:0; min-width:150px;">
+                <label>Project / deal</label>
+                <select class="gc-select" id="trendProject" onchange="renderWeekTrend()"></select>
+              </div>
+              <div class="gc-form-group" style="margin-bottom:0; min-width:90px;">
+                <label>Weeks</label>
+                <select class="gc-select" id="trendRange" onchange="renderWeekTrend()">
+                  <option value="8">8</option>
+                  <option value="13" selected>13</option>
+                  <option value="26">26</option>
+                  <option value="52">52</option>
+                </select>
+              </div>
+            </div>
+          </div>
           <div class="gc-card-body"><div class="gc-chart-container"><canvas id="chartWeekTrend"></canvas></div></div>
         </div>
       </div>
@@ -466,12 +481,67 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
       <div class="gc-card">
         <div class="gc-card-header">
           <div>
+            <span class="gc-card-title">Workload by person</span>
+            <div class="gc-card-sub" id="peopleLoadSub">Actual hours split by Deals vs Projects</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+            <div class="gc-form-group" style="margin-bottom:0; min-width:140px;">
+              <label>Show</label>
+              <select class="gc-select" id="peopleLoadMetric" onchange="renderPeopleLoadChart()">
+                <option value="actual" selected>Actual</option>
+                <option value="forecast">Forecast</option>
+                <option value="both">Actual & forecast</option>
+              </select>
+            </div>
+            <div class="gc-form-group" style="margin-bottom:0; min-width:220px;">
+              <label>Period</label>
+              <select class="gc-select" id="peopleLoadRange" onchange="renderPeopleLoadChart()"></select>
+            </div>
+            <button class="gc-btn gc-btn-ghost gc-btn-sm" id="peopleLoadViewBtn" onclick="togglePeopleLoadView()">↕ Column view</button>
+          </div>
+        </div>
+        <div class="gc-card-body"><div class="gc-chart-container" style="height:420px;"><canvas id="chartPersonLoad"></canvas></div></div>
+      </div>
+
+      <div class="gc-card">
+        <div class="gc-card-header">
+          <div>
+            <span class="gc-card-title">Weekly trend by person</span>
+            <div class="gc-card-sub">Actual vs forecast hours, week by week, for one person</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+            <div class="gc-form-group" style="margin-bottom:0; min-width:200px;">
+              <label>Person</label>
+              <select class="gc-select" id="personTrendUser" onchange="renderPersonTrend()"></select>
+            </div>
+            <div class="gc-form-group" style="margin-bottom:0; min-width:160px;">
+              <label>Weeks</label>
+              <select class="gc-select" id="personTrendRange" onchange="renderPersonTrend()">
+                <option value="8">Last 8 weeks</option>
+                <option value="13" selected>Last 13 weeks</option>
+                <option value="26">Last 26 weeks</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="gc-card-body"><div class="gc-chart-container" style="height:320px;"><canvas id="chartPersonTrend"></canvas></div></div>
+      </div>
+
+      <div class="gc-card">
+        <div class="gc-card-header">
+          <div>
             <span class="gc-card-title">By person</span>
-            <div class="gc-card-sub">Submission status week by week</div>
+            <div class="gc-card-sub">Submission status week by week — the number is actual hours logged</div>
           </div>
           <div style="display:flex; gap:8px; align-items:center;">
             <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="exportPeopleMatrix()">↓ Excel</button>
           </div>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:16px; padding:0 18px 6px; font-size:11px; color:var(--gc-gray-40); align-items:center;">
+          <span style="display:inline-flex; align-items:center; gap:6px;"><span class="gc-badge gc-badge-green">12h</span> actual + forecast</span>
+          <span style="display:inline-flex; align-items:center; gap:6px;"><span class="gc-badge gc-badge-amber">12h</span> only actual</span>
+          <span style="display:inline-flex; align-items:center; gap:6px;"><span class="gc-badge gc-badge-blue">F:12h</span> only forecast</span>
+          <span style="display:inline-flex; align-items:center; gap:6px;"><span class="gc-badge gc-badge-gray">—</span> nothing submitted</span>
         </div>
         <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="peopleMatrixTable"></table></div>
       </div>
@@ -495,31 +565,6 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
           </div>
         </div>
         <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="peopleBreakdownTable"></table></div>
-      </div>
-
-      <div class="gc-card">
-        <div class="gc-card-header">
-          <div>
-            <span class="gc-card-title">Workload by person</span>
-            <div class="gc-card-sub" id="peopleLoadSub">Actual hours split by Deals vs Projects</div>
-          </div>
-          <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
-            <div class="gc-form-group" style="margin-bottom:0; min-width:140px;">
-              <label>Show</label>
-              <select class="gc-select" id="peopleLoadMetric" onchange="renderPeopleLoadChart()">
-                <option value="actual" selected>Actual</option>
-                <option value="forecast">Forecast</option>
-                <option value="both">Actual & forecast</option>
-              </select>
-            </div>
-            <div class="gc-form-group" style="margin-bottom:0; min-width:220px;">
-              <label>Period</label>
-              <select class="gc-select" id="peopleLoadRange" onchange="renderPeopleLoadChart()"></select>
-            </div>
-            <button class="gc-btn gc-btn-ghost gc-btn-sm" id="peopleLoadViewBtn" onclick="togglePeopleLoadView()">↔ Bar view</button>
-          </div>
-        </div>
-        <div class="gc-card-body"><div class="gc-chart-container" style="height:420px;"><canvas id="chartPersonLoad"></canvas></div></div>
       </div>
     </section>
 
@@ -977,9 +1022,9 @@ function buildTabs() {
   const tabs = [
     { id: 'submit', label: 'Submit' },
     { id: 'history', label: 'History' },
+    { id: 'dashboard', label: 'Dashboard' },
   ];
   if (isPL(u)) {
-    tabs.push({ id: 'dashboard', label: 'Dashboard' });
     tabs.push({ id: 'people', label: 'By Person' });
     tabs.push({ id: 'variance', label: 'Variance' });
     tabs.push({ id: 'projects', label: 'Projects' });
@@ -1181,6 +1226,18 @@ function recomputeSubmitTotals() {
 }
 
 function resetSubmitForm() { renderSubmit(); }
+
+// Copy the Actual column values into the Forecast column (skips locked inputs).
+function copyActualToForecast() {
+  const aByProj = {};
+  document.querySelectorAll('#actualRows input[data-prefix="a"]').forEach(i => { aByProj[i.dataset.project] = i.value; });
+  const fInputs = [...document.querySelectorAll('#forecastRows input[data-prefix="f"]')];
+  const editable = fInputs.filter(i => !i.disabled);
+  if (editable.length === 0) { flashNotice('Forecast is locked — nothing to copy into.'); return; }
+  editable.forEach(i => { if (aByProj[i.dataset.project] !== undefined) i.value = aByProj[i.dataset.project]; });
+  recomputeSubmitTotals();
+  flashNotice('Actual copied into Forecast — adjust as needed.');
+}
 
 function submitWorkload() {
   const u = currentUser();
@@ -1500,45 +1557,59 @@ function lastNMondays(n) {
   return arr;
 }
 
+// Records visible on the dashboard: PL/Admin see everyone, a GC User sees only their own.
+function dashboardScopeRecords() {
+  const me = currentUser();
+  return isPL(me) ? state.records : state.records.filter(r => r.user_id === (me ? me.id : null));
+}
+
 function renderDashboard() {
-  const n = parseInt(document.getElementById('dashRange').value, 10);
-  const weeks = lastNMondays(n);
+  const me = currentUser();
+  const pl = isPL(me);
+  const rangeSel = document.getElementById('dashRange');
+  if (rangeSel && !rangeSel.options.length) populatePeriodSelect(rangeSel, 'r:13');
+  const weeks = periodWeeks(rangeSel ? rangeSel.value : 'r:13');
   const weekSet = new Set(weeks);
 
-  const recs = state.records.filter(r => weekSet.has(r.week_start));
+  document.getElementById('dashTitle').textContent = pl ? 'Team Dashboard' : 'My Dashboard';
+  document.getElementById('dashSub').textContent = (pl ? 'Aggregated view across the team' : 'Your hours, forecasts and accuracy') + ' · ' + periodLabel(weeks);
+
+  const scoped = dashboardScopeRecords();
+  const recs = scoped.filter(r => weekSet.has(r.week_start));
   const actualRecs = recs.filter(r => r.type === 'actual');
   const forecastRecs = recs.filter(r => r.type === 'forecast');
 
   const totalActual = sumEntries(actualRecs);
   const totalForecast = sumEntries(forecastRecs);
-  const peopleSubmitted = new Set(recs.map(r => r.user_id)).size;
-  const totalAnalysts = state.users.length;
 
-  // Forecast accuracy: same-week comparison across matched (user, week) pairs only
-  const pairs = matchedUserWeekPairs(weeks);
+  // Forecast accuracy: same-week (user, week) pairs that have both actual and forecast.
+  const byKey = {};
+  recs.forEach(r => { const k = r.user_id + '|' + r.week_start; (byKey[k] = byKey[k] || {})[r.type] = r; });
   let matchedActual = 0, matchedForecast = 0;
-  pairs.forEach(({ aRec, fRec }) => {
-    matchedActual += aRec.entries.reduce((s, e) => s + e.hours, 0);
-    matchedForecast += fRec.entries.reduce((s, e) => s + e.hours, 0);
+  Object.values(byKey).forEach(o => {
+    if (o.actual && o.forecast) {
+      matchedActual += o.actual.entries.reduce((s, e) => s + e.hours, 0);
+      matchedForecast += o.forecast.entries.reduce((s, e) => s + e.hours, 0);
+    }
   });
   const accuracy = (matchedForecast > 0 && matchedActual > 0) ? (1 - Math.abs(matchedActual - matchedForecast) / matchedForecast) * 100 : null;
+
+  // Last stat: for PL = people submitted; for a GC User = weeks they logged.
+  const lastStat = pl
+    ? `<div><div class="gc-cp-stat-label">People submitted</div><div class="gc-cp-stat-value wh">${new Set(recs.map(r => r.user_id)).size}/${state.users.filter(u => (u.status||'approved')==='approved').length}</div></div>`
+    : `<div><div class="gc-cp-stat-label">Weeks logged</div><div class="gc-cp-stat-value wh">${new Set(actualRecs.map(r => r.week_start)).size}</div></div>`;
 
   document.getElementById('dashStats').innerHTML = `
     <div><div class="gc-cp-stat-label">Total actual hours</div><div class="gc-cp-stat-value lime">${fmtHours(totalActual)}</div></div>
     <div><div class="gc-cp-stat-label">Total forecast hours</div><div class="gc-cp-stat-value wh">${fmtHours(totalForecast)}</div></div>
     <div><div class="gc-cp-stat-label">Forecast accuracy</div><div class="gc-cp-stat-value ${accuracy==null?'wh':accuracy>=80?'lime':accuracy>=60?'amber':'red'}">${accuracy==null?'—':accuracy.toFixed(0)+'%'}</div></div>
-    <div><div class="gc-cp-stat-label">People submitted</div><div class="gc-cp-stat-value wh">${peopleSubmitted}/${totalAnalysts}</div></div>
+    ${lastStat}
   `;
 
   const byProject = aggregateByProject(actualRecs);
   drawDoughnut('chartByProject', byProject.map(x => x.name), byProject.map(x => x.hours));
 
-  const weekTotals = weeks.map(w => ({
-    week: w,
-    actual: sumEntries(actualRecs.filter(r => r.week_start === w)),
-    forecast: sumEntries(forecastRecs.filter(r => r.week_start === w)),
-  }));
-  drawWeekTrend('chartWeekTrend', weekTotals);
+  renderWeekTrend(); // independent of the range above
 
   const tbl = document.getElementById('projectBreakdownTable');
   const projectAgg = {};
@@ -1602,6 +1673,31 @@ function drawDoughnut(canvasId, labels, data) {
   });
 }
 
+// Weekly trend — independent of the dashboard range; filterable by project/deal.
+function renderWeekTrend() {
+  const scoped = dashboardScopeRecords();
+  const trSel = document.getElementById('trendRange');
+  const n = trSel ? (parseInt(trSel.value, 10) || 13) : 13;
+  const weeks = lastNMondays(n);
+
+  const projSel = document.getElementById('trendProject');
+  if (projSel && !projSel.options.length) {
+    const opts = sortedProjects(state.projects).map(p => `<option value="${p.id}">${escapeHtml(p.name)}${p.code ? ' (' + escapeHtml(p.code) + ')' : ''}</option>`).join('');
+    projSel.innerHTML = '<option value="__all">All projects &amp; deals</option>' + opts;
+  }
+  const pid = projSel ? projSel.value : '__all';
+  const sumFor = (recs) => recs.reduce((s, r) => s + r.entries
+    .filter(e => pid === '__all' || e.project_id === pid)
+    .reduce((ss, e) => ss + e.hours, 0), 0);
+
+  const weekTotals = weeks.map(w => ({
+    week: w,
+    actual: sumFor(scoped.filter(r => r.type === 'actual' && r.week_start === w)),
+    forecast: sumFor(scoped.filter(r => r.type === 'forecast' && r.week_start === w)),
+  }));
+  drawWeekTrend('chartWeekTrend', weekTotals);
+}
+
 function drawWeekTrend(canvasId, weekTotals) {
   if (chartWeekTrendInstance) { chartWeekTrendInstance.destroy(); chartWeekTrendInstance = null; }
   const ctx = document.getElementById(canvasId);
@@ -1659,6 +1755,7 @@ function renderPeopleMatrix() {
   tbl.innerHTML = `<thead><tr>${headerCells}</tr></thead><tbody>${rows || '<tr><td colspan="11" class="gc-empty">No users.</td></tr>'}</tbody>`;
 
   renderPeopleLoadChart();
+  renderPersonTrend();
   renderPeopleBreakdown();
 }
 
@@ -1670,8 +1767,8 @@ function periodWeeks(value) {
 }
 function populatePeriodSelect(sel, selected) {
   if (!sel) return;
-  const weeks = lastNMondays(26).slice().reverse(); // newest first
-  const ranges = [4, 8, 13, 26].map(n => `<option value="r:${n}">Last ${n} weeks</option>`).join('');
+  const weeks = lastNMondays(52).slice().reverse(); // newest first
+  const ranges = [4, 8, 13, 26, 52].map(n => `<option value="r:${n}">Last ${n} weeks</option>`).join('');
   const singles = weeks.map(w => `<option value="w:${w}">W${isoWeekNumber(parseYmd(w))} · ${fmtWeekRange(w)}</option>`).join('');
   sel.innerHTML = `<optgroup label="Ranges">${ranges}</optgroup><optgroup label="Single week">${singles}</optgroup>`;
   sel.value = selected || 'r:4';
@@ -1680,6 +1777,11 @@ function periodLabel(weeks) {
   if (weeks.length === 1) return 'Week of ' + fmtWeekRange(weeks[0]);
   return `${fmtWeekShort(weeks[0])} → ${fmtWeekRange(weeks[weeks.length - 1])}`;
 }
+// Most recent week that has at least one actual record with hours.
+function lastActualWeek() {
+  const ws = state.records.filter(r => r.type === 'actual' && r.entries && r.entries.length).map(r => r.week_start);
+  return ws.length ? ws.sort().reverse()[0] : null;
+}
 
 // "Workload by person" — hours stacked by TYPE (Deals vs Projects) over a
 // selectable period (range or single week), for Actual / Forecast / Both.
@@ -1687,7 +1789,7 @@ const DEAL_COLOR = '#003EFF';      // matches the Deal badge
 const PROJECT_COLOR = '#C4F222';   // matches the Project badge
 const DEAL_COLOR_F = 'rgba(0,62,255,0.40)';     // forecast = lighter
 const PROJECT_COLOR_F = 'rgba(150,190,20,0.55)';
-let peopleLoadHorizontal = false;
+let peopleLoadHorizontal = true; // default to Row View
 function togglePeopleLoadView() {
   peopleLoadHorizontal = !peopleLoadHorizontal;
   renderPeopleLoadChart();
@@ -1695,7 +1797,10 @@ function togglePeopleLoadView() {
 function renderPeopleLoadChart() {
   const horiz = peopleLoadHorizontal;
   const rangeSel = document.getElementById('peopleLoadRange');
-  if (rangeSel && !rangeSel.options.length) populatePeriodSelect(rangeSel, 'r:4');
+  if (rangeSel && !rangeSel.options.length) {
+    const law = lastActualWeek();
+    populatePeriodSelect(rangeSel, law ? 'w:' + law : 'r:4');
+  }
   const metric = (document.getElementById('peopleLoadMetric') || {}).value || 'actual';
   const weeks = periodWeeks(rangeSel ? rangeSel.value : 'r:4');
   const weekSet = new Set(weeks);
@@ -1782,7 +1887,7 @@ function renderPeopleLoadChart() {
       indexAxis: horiz ? 'y' : 'x',
       responsive: true, maintainAspectRatio: false,
       layout: { padding: { right: horiz ? 52 : 8, top: horiz ? 8 : 20 } },
-      interaction: { mode: 'index', intersect: false },
+      interaction: { mode: 'index', intersect: false, axis: horiz ? 'y' : 'x' },
       plugins: {
         legend: { position: horiz ? 'top' : 'right', labels: { font: { family: 'Montserrat', size: 11 }, boxWidth: 12 } },
         tooltip: { callbacks: {
@@ -1807,6 +1912,42 @@ function renderPeopleLoadChart() {
         y: { stacked: true, beginAtZero: true, title: horiz ? { display: false } : { display: true, text: 'Hours' } }
       }
     }
+  });
+}
+
+// ── Weekly trend for a single person ─────────────────────────
+let chartPersonTrendInstance = null;
+function renderPersonTrend() {
+  const sel = document.getElementById('personTrendUser');
+  if (!sel) return;
+  const users = [...state.users].filter(x => (x.status || 'approved') === 'approved').sort((a,b)=>a.name.localeCompare(b.name));
+  if (sel.options.length !== users.length) {
+    const cur = sel.value;
+    const me = currentUser();
+    sel.innerHTML = users.map(x => `<option value="${x.id}">${escapeHtml(x.name)}</option>`).join('');
+    sel.value = (cur && users.some(u => u.id === cur)) ? cur
+              : (me && users.some(u => u.id === me.id)) ? me.id
+              : (users[0] ? users[0].id : '');
+  }
+  const uid = sel.value;
+  const n = parseInt((document.getElementById('personTrendRange') || {}).value, 10) || 13;
+  const weeks = lastNMondays(n);
+  const recs = state.records.filter(r => r.user_id === uid);
+  const weekTotals = weeks.map(w => ({
+    week: w,
+    actual: sumEntries(recs.filter(r => r.type === 'actual' && r.week_start === w)),
+    forecast: sumEntries(recs.filter(r => r.type === 'forecast' && r.week_start === w)),
+  }));
+  if (chartPersonTrendInstance) { chartPersonTrendInstance.destroy(); chartPersonTrendInstance = null; }
+  const ctx = document.getElementById('chartPersonTrend');
+  if (!ctx) return;
+  chartPersonTrendInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels: weekTotals.map(w => fmtWeekShort(w.week)), datasets: [
+      { label: 'Actual', data: weekTotals.map(w => w.actual), borderColor:'#003EFF', backgroundColor:'rgba(0,62,255,0.10)', tension:0.3, fill:true },
+      { label: 'Forecast', data: weekTotals.map(w => w.forecast), borderColor:'#9EC31B', backgroundColor:'rgba(196,242,34,0.15)', tension:0.3, fill:false, borderDash:[4,4] }
+    ]},
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ font:{ family:'Montserrat', size:11 } } } }, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Hours' } } } }
   });
 }
 
@@ -2315,11 +2456,12 @@ async function deleteUser(id) {
 // EXPORT
 // =========================================================
 function exportProjectBreakdown() {
-  const n = parseInt(document.getElementById('dashRange').value, 10);
-  const weeks = lastNMondays(n);
+  const rangeSel = document.getElementById('dashRange');
+  const weeks = periodWeeks(rangeSel ? rangeSel.value : 'r:13');
   const weekSet = new Set(weeks);
-  const actualRecs = state.records.filter(r => r.type === 'actual' && weekSet.has(r.week_start));
-  const forecastRecs = state.records.filter(r => r.type === 'forecast' && weekSet.has(r.week_start));
+  const scoped = dashboardScopeRecords();
+  const actualRecs = scoped.filter(r => r.type === 'actual' && weekSet.has(r.week_start));
+  const forecastRecs = scoped.filter(r => r.type === 'forecast' && weekSet.has(r.week_start));
   const data = [['Type','Name','Code','Actual (h)','Forecast (h)','Variance (h)','Variance %']];
   const map = {};
   for (const p of sortedProjects(state.projects)) map[p.id] = { name:p.name, code:p.code||'', type:p.type||'Project', actual:0, forecast:0 };
