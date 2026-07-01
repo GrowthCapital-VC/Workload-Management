@@ -212,6 +212,13 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
 .submit-foot .val { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:18px; color:var(--gc-gray-10); }
 .submit-foot .val.over { color:var(--gc-red); }
 .submit-foot .val.ok { color:var(--gc-green); }
+.hr-step { display:inline-flex; align-items:center; gap:6px; flex:0 0 auto; }
+.hr-step input { width:60px; text-align:center; }
+.hr-btn { width:28px; height:28px; flex:0 0 28px; border:1px solid var(--gc-gray-80); background:var(--gc-offwhite); border-radius:6px; font-size:16px; font-weight:700; line-height:1; color:var(--gc-gray-10); cursor:pointer; display:flex; align-items:center; justify-content:center; user-select:none; }
+.hr-btn:hover:not(:disabled) { background:var(--gc-lime); border-color:var(--gc-lime); }
+.hr-btn:disabled { opacity:.4; cursor:not-allowed; }
+.hr-step input[type=number]::-webkit-inner-spin-button, .hr-step input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+.hr-step input[type=number] { -moz-appearance:textfield; }
 
 .notice { padding:12px 16px; border-radius:8px; font-size:12px; margin-bottom:16px; display:flex; align-items:center; gap:10px; }
 .notice-info { background:#EAF4FE; color:#1F4E8C; border-left:3px solid var(--gc-blue); }
@@ -537,7 +544,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
             <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="exportPeopleMatrix()">↓ Excel</button>
           </div>
         </div>
-        <div style="display:flex; flex-wrap:wrap; gap:16px; padding:0 18px 6px; font-size:11px; color:var(--gc-gray-40); align-items:center;">
+        <div style="display:flex; flex-wrap:wrap; gap:16px; padding:12px 18px; margin:0 18px; border-top:1px solid var(--gc-gray-95); font-size:11px; color:var(--gc-gray-40); align-items:center;">
           <span style="display:inline-flex; align-items:center; gap:6px;"><span class="gc-badge gc-badge-green">12h</span> actual + forecast</span>
           <span style="display:inline-flex; align-items:center; gap:6px;"><span class="gc-badge gc-badge-amber">12h</span> only actual</span>
           <span style="display:inline-flex; align-items:center; gap:6px;"><span class="gc-badge gc-badge-blue">F:12h</span> only forecast</span>
@@ -1201,14 +1208,18 @@ function submitRowHtml(e, prefix, locked) {
   return `
     <div class="submit-row">
       <span class="proj">${projectTypeBadge(e.type)}<span>${escapeHtml(e.name)}</span>${codeHtml}</span>
-      <input type="number" min="0" max="168" step="0.5" class="gc-input small r" data-prefix="${prefix}" data-project="${e.project_id}" value="${e.hours || ''}" placeholder="0" oninput="recomputeSubmitTotals()" ${locked?'disabled':''}>
+      <span class="hr-step">
+        <button type="button" class="hr-btn" onclick="stepHours(this,-1)" ${locked?'disabled':''} tabindex="-1" aria-label="Decrease">−</button>
+        <input type="number" min="0" max="168" step="1" class="gc-input small" data-prefix="${prefix}" data-project="${e.project_id}" value="${e.hours || ''}" placeholder="0" oninput="recomputeSubmitTotals()" ${locked?'disabled':''}>
+        <button type="button" class="hr-btn" onclick="stepHours(this,1)" ${locked?'disabled':''} tabindex="-1" aria-label="Increase">+</button>
+      </span>
     </div>
   `;
 }
 
 function readSubmitForm() {
-  const a = [...document.querySelectorAll('#actualRows input[data-prefix="a"]')].map(i => ({ project_id: i.dataset.project, hours: parseFloat(i.value) || 0 }));
-  const f = [...document.querySelectorAll('#forecastRows input[data-prefix="f"]')].map(i => ({ project_id: i.dataset.project, hours: parseFloat(i.value) || 0 }));
+  const a = [...document.querySelectorAll('#actualRows input[data-prefix="a"]')].map(i => ({ project_id: i.dataset.project, hours: Math.round(parseFloat(i.value) || 0) }));
+  const f = [...document.querySelectorAll('#forecastRows input[data-prefix="f"]')].map(i => ({ project_id: i.dataset.project, hours: Math.round(parseFloat(i.value) || 0) }));
   return { actual: a, forecast: f };
 }
 
@@ -1226,6 +1237,15 @@ function recomputeSubmitTotals() {
 }
 
 function resetSubmitForm() { renderSubmit(); }
+
+// Increment/decrement an hours input by whole hours (clamped 0..168).
+function stepHours(btn, delta) {
+  const input = btn.parentElement.querySelector('input');
+  if (!input || input.disabled) return;
+  const cur = Math.round(parseFloat(input.value) || 0);
+  input.value = Math.max(0, Math.min(168, cur + delta)) || '';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
 
 // Copy the Actual column values into the Forecast column (skips locked inputs).
 function copyActualToForecast() {
@@ -1519,7 +1539,11 @@ function editRowHtml(e, prefix, locked) {
   return `
     <div class="submit-row">
       <span class="proj">${projectTypeBadge(e.type)}<span>${escapeHtml(e.name)}</span>${codeHtml}</span>
-      <input type="number" min="0" max="168" step="0.5" class="gc-input small r" data-prefix="${prefix}" data-project="${e.project_id}" value="${e.hours || ''}" placeholder="0" oninput="recomputeEditTotals()" ${locked?'disabled':''}>
+      <span class="hr-step">
+        <button type="button" class="hr-btn" onclick="stepHours(this,-1)" ${locked?'disabled':''} tabindex="-1" aria-label="Decrease">−</button>
+        <input type="number" min="0" max="168" step="1" class="gc-input small" data-prefix="${prefix}" data-project="${e.project_id}" value="${e.hours || ''}" placeholder="0" oninput="recomputeEditTotals()" ${locked?'disabled':''}>
+        <button type="button" class="hr-btn" onclick="stepHours(this,1)" ${locked?'disabled':''} tabindex="-1" aria-label="Increase">+</button>
+      </span>
     </div>
   `;
 }
@@ -1532,8 +1556,8 @@ function recomputeEditTotals() {
 function saveEditRecord() {
   if (!editingRecord) return;
   const { user_id, week_actual } = editingRecord;
-  const aEntries = [...document.querySelectorAll('#erm_actualRows input[data-prefix="ea"]')].map(i => ({ project_id: i.dataset.project, hours: parseFloat(i.value) || 0 }));
-  const fEntries = [...document.querySelectorAll('#erm_forecastRows input[data-prefix="ef"]')].map(i => ({ project_id: i.dataset.project, hours: parseFloat(i.value) || 0 }));
+  const aEntries = [...document.querySelectorAll('#erm_actualRows input[data-prefix="ea"]')].map(i => ({ project_id: i.dataset.project, hours: Math.round(parseFloat(i.value) || 0) }));
+  const fEntries = [...document.querySelectorAll('#erm_forecastRows input[data-prefix="ef"]')].map(i => ({ project_id: i.dataset.project, hours: Math.round(parseFloat(i.value) || 0) }));
   const now = new Date().toISOString();
   if (isWeekClosed(week_actual)) { alert('This week is closed. An Admin must reopen it before it can be edited.'); return; }
   saveRecord(upsertRecord(user_id, week_actual, 'actual', aEntries, now));
@@ -1582,17 +1606,20 @@ function renderDashboard() {
   const totalActual = sumEntries(actualRecs);
   const totalForecast = sumEntries(forecastRecs);
 
-  // Forecast accuracy: same-week (user, week) pairs that have both actual and forecast.
+  // Forecast accuracy: average per-pair accuracy across (user, week) pairs that
+  // have both an actual and a forecast. Per-pair (not aggregate) so one outlier
+  // can't peg the whole KPI, and it moves with the selected range.
   const byKey = {};
   recs.forEach(r => { const k = r.user_id + '|' + r.week_start; (byKey[k] = byKey[k] || {})[r.type] = r; });
-  let matchedActual = 0, matchedForecast = 0;
+  let accSum = 0, accN = 0;
   Object.values(byKey).forEach(o => {
     if (o.actual && o.forecast) {
-      matchedActual += o.actual.entries.reduce((s, e) => s + e.hours, 0);
-      matchedForecast += o.forecast.entries.reduce((s, e) => s + e.hours, 0);
+      const a = o.actual.entries.reduce((s, e) => s + e.hours, 0);
+      const f = o.forecast.entries.reduce((s, e) => s + e.hours, 0);
+      if (f > 0) { accSum += Math.max(0, 1 - Math.abs(a - f) / f); accN++; }
     }
   });
-  const accuracy = (matchedForecast > 0 && matchedActual > 0) ? (1 - Math.abs(matchedActual - matchedForecast) / matchedForecast) * 100 : null;
+  const accuracy = accN > 0 ? (accSum / accN) * 100 : null;
 
   // Last stat: for PL = people submitted; for a GC User = weeks they logged.
   const lastStat = pl
@@ -1690,11 +1717,11 @@ function renderWeekTrend() {
     .filter(e => pid === '__all' || e.project_id === pid)
     .reduce((ss, e) => ss + e.hours, 0), 0);
 
-  const weekTotals = weeks.map(w => ({
-    week: w,
-    actual: sumFor(scoped.filter(r => r.type === 'actual' && r.week_start === w)),
-    forecast: sumFor(scoped.filter(r => r.type === 'forecast' && r.week_start === w)),
-  }));
+  const weekTotals = weeks.map(w => {
+    const aRecs = scoped.filter(r => r.type === 'actual' && r.week_start === w);
+    const fRecs = scoped.filter(r => r.type === 'forecast' && r.week_start === w);
+    return { week: w, actual: aRecs.length ? sumFor(aRecs) : null, forecast: fRecs.length ? sumFor(fRecs) : null };
+  });
   drawWeekTrend('chartWeekTrend', weekTotals);
 }
 
@@ -1933,20 +1960,23 @@ function renderPersonTrend() {
   const n = parseInt((document.getElementById('personTrendRange') || {}).value, 10) || 13;
   const weeks = lastNMondays(n);
   const recs = state.records.filter(r => r.user_id === uid);
-  const weekTotals = weeks.map(w => ({
-    week: w,
-    actual: sumEntries(recs.filter(r => r.type === 'actual' && r.week_start === w)),
-    forecast: sumEntries(recs.filter(r => r.type === 'forecast' && r.week_start === w)),
-  }));
+  const target = Number(state.settings.hours_per_week_target) || 0;
+  const weekTotals = weeks.map(w => {
+    const aRecs = recs.filter(r => r.type === 'actual' && r.week_start === w);
+    const fRecs = recs.filter(r => r.type === 'forecast' && r.week_start === w);
+    return { week: w, actual: aRecs.length ? sumEntries(aRecs) : null, forecast: fRecs.length ? sumEntries(fRecs) : null };
+  });
   if (chartPersonTrendInstance) { chartPersonTrendInstance.destroy(); chartPersonTrendInstance = null; }
   const ctx = document.getElementById('chartPersonTrend');
   if (!ctx) return;
+  const datasets = [
+    { label: 'Actual', data: weekTotals.map(w => w.actual), borderColor:'#003EFF', backgroundColor:'rgba(0,62,255,0.10)', tension:0.3, fill:true },
+    { label: 'Forecast', data: weekTotals.map(w => w.forecast), borderColor:'#9EC31B', backgroundColor:'rgba(196,242,34,0.15)', tension:0.3, fill:false, borderDash:[4,4] }
+  ];
+  if (target > 0) datasets.push({ label: `Weekly target (${target}h)`, data: weeks.map(() => target), borderColor:'#E74C3C', borderWidth:2, borderDash:[6,4], pointRadius:0, pointHoverRadius:0, fill:false, tension:0 });
   chartPersonTrendInstance = new Chart(ctx, {
     type: 'line',
-    data: { labels: weekTotals.map(w => fmtWeekShort(w.week)), datasets: [
-      { label: 'Actual', data: weekTotals.map(w => w.actual), borderColor:'#003EFF', backgroundColor:'rgba(0,62,255,0.10)', tension:0.3, fill:true },
-      { label: 'Forecast', data: weekTotals.map(w => w.forecast), borderColor:'#9EC31B', backgroundColor:'rgba(196,242,34,0.15)', tension:0.3, fill:false, borderDash:[4,4] }
-    ]},
+    data: { labels: weekTotals.map(w => fmtWeekShort(w.week)), datasets },
     options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ font:{ family:'Montserrat', size:11 } } } }, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Hours' } } } }
   });
 }
