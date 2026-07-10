@@ -397,3 +397,31 @@ update public.profiles set role = 'Admin'
 where role = 'PL'
   and not exists (select 1 from public.profiles where role = 'Admin')
   and (select count(*) from public.profiles where role = 'PL') = 1;
+
+-- =============================================================
+-- MIGRATION 4 — Closing a week also freezes the next week's forecast
+-- (idempotent — safe to run on the live database)
+--
+-- Rationale: a submission cycle is "actual of week W" + "forecast of
+-- week W+1". So closing week W must also block the forecast for W+1.
+-- =============================================================
+drop policy if exists "insert_records" on public.records;
+create policy "insert_records"
+  on public.records for insert to authenticated
+  with check (
+    public.is_approved()
+    and (user_id = auth.uid() or public.is_pl())
+    and not exists (select 1 from public.closed_weeks cw where cw.week_start = records.week_start)
+    and not (records.type = 'forecast'
+             and exists (select 1 from public.closed_weeks cw where cw.week_start = records.week_start - 7))
+  );
+drop policy if exists "update_records" on public.records;
+create policy "update_records"
+  on public.records for update to authenticated
+  using (
+    public.is_approved()
+    and (user_id = auth.uid() or public.is_pl())
+    and not exists (select 1 from public.closed_weeks cw where cw.week_start = records.week_start)
+    and not (records.type = 'forecast'
+             and exists (select 1 from public.closed_weeks cw where cw.week_start = records.week_start - 7))
+  );

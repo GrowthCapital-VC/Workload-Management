@@ -349,7 +349,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
     <section class="gc-section active" id="sec-submit">
       <div class="gc-controls-panel">
         <div class="gc-cp-title" id="submitTitle">Log your workload</div>
-        <div class="gc-cp-sub" id="submitSub">By Monday 18:00 — actual for last week + forecast for the current week</div>
+        <div class="gc-cp-sub" id="submitSub">Actual for the finished week + forecast for the next. The week rolls over Friday 15:00; soft deadline Monday 18:00.</div>
         <hr class="gc-cp-divider">
         <div class="gc-cp-stats" id="submitStats"></div>
       </div>
@@ -887,6 +887,22 @@ function addDays(d, n) {
   r.setDate(r.getDate() + n);
   return r;
 }
+// The Submit "current week" rolls forward on Friday 15:00 (and stays rolled
+// over Sat/Sun): from then on you log the actual of the just-finished week and
+// forecast the next one.
+function submitThisMonday() {
+  const now = new Date();
+  const mon = mondayOf(now);
+  const dow = now.getDay(); // 0=Sun … 5=Fri … 6=Sat
+  if (dow === 6 || dow === 0) return addDays(mon, 7);
+  if (dow === 5 && now.getHours() >= 15) return addDays(mon, 7);
+  return mon;
+}
+// The week before a given Monday (ymd string in, ymd string out).
+function prevWeekYmd(week) { return ymd(addDays(parseYmd(week), -7)); }
+// A forecast for `week` is frozen if that week is closed OR the prior week is
+// closed (closing a week also freezes the next week's forecast).
+function isForecastLocked(week) { return isWeekClosed(week) || isWeekClosed(prevWeekYmd(week)); }
 const EN_MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const EN_MONTHS_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -1104,6 +1120,7 @@ function entriesForForm(user_id, week_start, type) {
 
 function isRecordLockedForUser(rec, user) {
   if (rec && isWeekClosed(rec.week_start)) return true; // a closed week is locked for everyone
+  if (rec && rec.type === 'forecast' && isWeekClosed(prevWeekYmd(rec.week_start))) return true; // closing a week freezes the next week's forecast
   if (!rec) return false;
   if (isPL(user)) return false;
   const win = Number(state.settings.edit_window_days) || 0;
@@ -1116,7 +1133,7 @@ function isRecordLockedForUser(rec, user) {
 function renderSubmit() {
   const u = currentUser();
   const today = new Date();
-  const thisMon = mondayOf(today);
+  const thisMon = submitThisMonday();
   const lastMon = addDays(thisMon, -7);
   const actualWeek = ymd(lastMon);
   const forecastWeek = ymd(thisMon);
@@ -1127,7 +1144,7 @@ function renderSubmit() {
   const actualRec = findRecord(u.id, actualWeek, 'actual');
   const forecastRec = findRecord(u.id, forecastWeek, 'forecast');
   const actualClosed = isWeekClosed(actualWeek);
-  const forecastClosed = isWeekClosed(forecastWeek);
+  const forecastClosed = isForecastLocked(forecastWeek);
   const actualLocked = actualClosed || isRecordLockedForUser(actualRec, u);
   const forecastLocked = forecastClosed || isRecordLockedForUser(forecastRec, u);
 
@@ -1156,8 +1173,8 @@ function renderSubmit() {
   } else if (actualRec || forecastRec) {
     html += `<div class="notice notice-info">You've only partially submitted. Complete the other column and resubmit.</div>`;
   } else {
-    const dow = today.getDay();
-    if (dow > 1 || (dow === 1 && today.getHours() >= 18)) {
+    const deadline = new Date(thisMon.getFullYear(), thisMon.getMonth(), thisMon.getDate(), 18, 0, 0);
+    if (today >= deadline) {
       html += `<div class="notice notice-warn">⚠ You're past the soft deadline (Monday 18:00). Please submit as soon as possible.</div>`;
     }
   }
@@ -1261,14 +1278,13 @@ function copyActualToForecast() {
 
 function submitWorkload() {
   const u = currentUser();
-  const today = new Date();
-  const thisMon = ymd(mondayOf(today));
-  const lastMon = ymd(addDays(mondayOf(today), -7));
+  const thisMon = ymd(submitThisMonday());
+  const lastMon = ymd(addDays(submitThisMonday(), -7));
   const { actual, forecast } = readSubmitForm();
   const now = new Date().toISOString();
 
   const aLocked = isWeekClosed(lastMon) || isRecordLockedForUser(findRecord(u.id, lastMon, 'actual'), u);
-  const fLocked = isWeekClosed(thisMon) || isRecordLockedForUser(findRecord(u.id, thisMon, 'forecast'), u);
+  const fLocked = isForecastLocked(thisMon) || isRecordLockedForUser(findRecord(u.id, thisMon, 'forecast'), u);
 
   if (!aLocked) saveRecord(upsertRecord(u.id, lastMon, 'actual', actual, now));
   if (!fLocked) saveRecord(upsertRecord(u.id, thisMon, 'forecast', forecast, now));
@@ -1408,7 +1424,18 @@ async function toggleWeekClosed(week) {
     state.closedWeeks.delete(week);
     flashNotice('Week reopened.');
   } else {
-    if (!confirm(`Close the week of ${fmtWeekRange(week)}? No one (not even PLs) will be able to edit it until you reopen it.`)) return;
+    // Warn if some approved users haven't fully submitted (actual + forecast) for this week.
+    const approved = state.users.filter(u => (u.status || 'approved') === 'approved');
+    const missing = approved.filter(u => {
+      const hasA = state.records.some(r => r.user_id === u.id && r.week_start === week && r.type === 'actual');
+      const hasF = state.records.some(r => r.user_id === u.id && r.week_start === week && r.type === 'forecast');
+      return !(hasA && hasF);
+    });
+    let msg = `Close the week of ${fmtWeekRange(week)}? No one (not even PLs) will be able to edit it until you reopen it.`;
+    if (missing.length) {
+      msg = `${missing.length} of ${approved.length} people haven't fully submitted (actual + forecast) for the week of ${fmtWeekRange(week)}:\n\n• ${missing.map(u => u.name).join('\n• ')}\n\nClose it anyway? No one (not even PLs) will be able to edit it until you reopen it.`;
+    }
+    if (!confirm(msg)) return;
     const { error } = await sb.from('closed_weeks').insert({ week_start: week, closed_by: currentUser().id });
     if (error) { alert('Could not close the week: ' + error.message); return; }
     state.closedWeeks.add(week);
@@ -1559,9 +1586,12 @@ function saveEditRecord() {
   const aEntries = [...document.querySelectorAll('#erm_actualRows input[data-prefix="ea"]')].map(i => ({ project_id: i.dataset.project, hours: Math.round(parseFloat(i.value) || 0) }));
   const fEntries = [...document.querySelectorAll('#erm_forecastRows input[data-prefix="ef"]')].map(i => ({ project_id: i.dataset.project, hours: Math.round(parseFloat(i.value) || 0) }));
   const now = new Date().toISOString();
-  if (isWeekClosed(week_actual)) { alert('This week is closed. An Admin must reopen it before it can be edited.'); return; }
-  saveRecord(upsertRecord(user_id, week_actual, 'actual', aEntries, now));
-  saveRecord(upsertRecord(user_id, week_actual, 'forecast', fEntries, now));
+  const me = currentUser();
+  const aLocked = isRecordLockedForUser(findRecord(user_id, week_actual, 'actual') || { week_start: week_actual, type: 'actual' }, me) || isWeekClosed(week_actual);
+  const fLocked = isRecordLockedForUser(findRecord(user_id, week_actual, 'forecast') || { week_start: week_actual, type: 'forecast' }, me) || isForecastLocked(week_actual);
+  if (aLocked && fLocked) { alert('This week is locked. An Admin must reopen it before it can be edited.'); return; }
+  if (!aLocked) saveRecord(upsertRecord(user_id, week_actual, 'actual', aEntries, now));
+  if (!fLocked) saveRecord(upsertRecord(user_id, week_actual, 'forecast', fEntries, now));
   closeModal('editRecordModal');
   renderActiveSection();
   flashNotice('Submission updated.');
