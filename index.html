@@ -435,7 +435,14 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
             <div class="gc-cp-title" id="dashTitle">Team Dashboard</div>
             <div class="gc-cp-sub" id="dashSub">Aggregated view across the team</div>
           </div>
-          <div style="display:flex; gap:12px; align-items:flex-end;">
+          <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+            <div class="gc-form-group" style="margin-bottom:0; min-width:150px;" id="dashScopeWrap">
+              <label>Scope</label>
+              <select class="gc-select" id="dashScope" onchange="renderDashboard()">
+                <option value="team" selected>Whole team</option>
+                <option value="me">Only my data</option>
+              </select>
+            </div>
             <div class="gc-form-group" style="margin-bottom:0; min-width:220px;">
               <label>Range (charts &amp; table)</label>
               <select class="gc-select" id="dashRange" onchange="renderDashboard()"></select>
@@ -1611,10 +1618,14 @@ function lastNMondays(n) {
   return arr;
 }
 
-// Records visible on the dashboard: PL/Admin see everyone, a GC User sees only their own.
+// Records visible on the dashboard: a GC User always sees only their own;
+// a PL/Admin sees the whole team, or only themselves via the Scope selector.
 function dashboardScopeRecords() {
   const me = currentUser();
-  return isPL(me) ? state.records : state.records.filter(r => r.user_id === (me ? me.id : null));
+  if (!me) return [];
+  if (!isPL(me)) return state.records.filter(r => r.user_id === me.id);
+  const sel = document.getElementById('dashScope');
+  return (sel && sel.value === 'me') ? state.records.filter(r => r.user_id === me.id) : state.records;
 }
 
 function renderDashboard() {
@@ -1625,8 +1636,13 @@ function renderDashboard() {
   const weeks = periodWeeks(rangeSel ? rangeSel.value : 'r:13');
   const weekSet = new Set(weeks);
 
-  document.getElementById('dashTitle').textContent = pl ? 'Team Dashboard' : 'My Dashboard';
-  document.getElementById('dashSub').textContent = (pl ? 'Aggregated view across the team' : 'Your hours, forecasts and accuracy') + ' · ' + periodLabel(weeks);
+  // Scope selector is a PL/Admin tool; GC Users are always personal.
+  const scopeWrap = document.getElementById('dashScopeWrap');
+  if (scopeWrap) scopeWrap.style.display = pl ? '' : 'none';
+  const personal = !pl || ((document.getElementById('dashScope') || {}).value === 'me');
+
+  document.getElementById('dashTitle').textContent = personal ? 'My Dashboard' : 'Team Dashboard';
+  document.getElementById('dashSub').textContent = (personal ? 'Your hours, forecasts and accuracy' : 'Aggregated view across the team') + ' · ' + periodLabel(weeks);
 
   const scoped = dashboardScopeRecords();
   const recs = scoped.filter(r => weekSet.has(r.week_start));
@@ -1651,8 +1667,8 @@ function renderDashboard() {
   });
   const accuracy = accN > 0 ? (accSum / accN) * 100 : null;
 
-  // Last stat: for PL = people submitted; for a GC User = weeks they logged.
-  const lastStat = pl
+  // Last stat: team view = people submitted; personal view = weeks logged.
+  const lastStat = !personal
     ? `<div><div class="gc-cp-stat-label">People submitted</div><div class="gc-cp-stat-value wh">${new Set(recs.map(r => r.user_id)).size}/${state.users.filter(u => (u.status||'approved')==='approved').length}</div></div>`
     : `<div><div class="gc-cp-stat-label">Weeks logged</div><div class="gc-cp-stat-value wh">${new Set(actualRecs.map(r => r.week_start)).size}</div></div>`;
 
@@ -2661,19 +2677,27 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 // =========================================================
 // BOOT
 // =========================================================
+// Supabase re-emits SIGNED_IN every time the tab regains focus (e.g. coming
+// back from Outlook). Without this guard the app would re-load and re-render,
+// wiping any unsaved edits in the Submit form.
+let appStarted = false;
+
 document.addEventListener('DOMContentLoaded', () => {
   // onAuthStateChange fires immediately with INITIAL_SESSION
   sb.auth.onAuthStateChange(async (event, sbSession) => {
     if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
       if (sbSession) {
+        if (appStarted) return; // focus-triggered re-emission — keep the current screen untouched
+        appStarted = true;
         const res = await loadAllFromSupabase();
         if (res === 'ok') enterApp();
         else if (res === 'pending' || res === 'rejected') showPending(res);
-        else showLogin();
+        else { appStarted = false; showLogin(); }
       } else {
         showLogin();
       }
     } else if (event === 'SIGNED_OUT') {
+      appStarted = false;
       state = { users: [], projects: [], records: [], settings: { ...DEFAULT_SETTINGS }, currentUser: null, closedWeeks: new Set() };
       showLogin();
     }
