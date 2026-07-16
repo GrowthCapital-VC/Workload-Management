@@ -495,6 +495,17 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
       <div class="gc-card">
         <div class="gc-card-header">
           <div>
+            <span class="gc-card-title">Submission check — current cycle</span>
+            <div class="gc-card-sub" id="submitStatusSub">Who has submitted what's due this cycle</div>
+          </div>
+          <span class="gc-pill" id="submitStatusCount">—</span>
+        </div>
+        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="submitStatusTable"></table></div>
+      </div>
+
+      <div class="gc-card">
+        <div class="gc-card-header">
+          <div>
             <span class="gc-card-title">Workload by person</span>
             <div class="gc-card-sub" id="peopleLoadSub">Actual hours split by Deals vs Projects</div>
           </div>
@@ -1827,9 +1838,55 @@ function renderPeopleMatrix() {
 
   tbl.innerHTML = `<thead><tr>${headerCells}</tr></thead><tbody>${rows || '<tr><td colspan="11" class="gc-empty">No users.</td></tr>'}</tbody>`;
 
+  renderSubmitStatus();
   renderPeopleLoadChart();
   renderPersonTrend();
   renderPeopleBreakdown();
+}
+
+// ── Submission check: who has submitted the current cycle ────
+// The cycle mirrors the Submit tab (Friday-15:00 rollover): actual for the
+// finished week + forecast for the current one.
+function renderSubmitStatus() {
+  const tbl = document.getElementById('submitStatusTable');
+  if (!tbl) return;
+  const forecastWeek = ymd(submitThisMonday());
+  const actualWeek = prevWeekYmd(forecastWeek);
+  const users = [...state.users].filter(x => (x.status || 'approved') === 'approved');
+
+  document.getElementById('submitStatusSub').textContent =
+    `Actual for ${fmtWeekRange(actualWeek)} + forecast for ${fmtWeekRange(forecastWeek)}`;
+
+  const rows = users.map(u => {
+    const hasA = state.records.some(r => r.user_id === u.id && r.week_start === actualWeek && r.type === 'actual');
+    const hasF = state.records.some(r => r.user_id === u.id && r.week_start === forecastWeek && r.type === 'forecast');
+    return { u, hasA, hasF, done: hasA && hasF };
+  });
+  // Whoever is missing something floats to the top; then alphabetical.
+  rows.sort((a, b) => (a.done - b.done) || a.u.name.localeCompare(b.u.name));
+
+  const doneCount = rows.filter(r => r.done).length;
+  const cnt = document.getElementById('submitStatusCount');
+  if (cnt) cnt.textContent = `${doneCount}/${rows.length} complete`;
+
+  const check = ok => ok
+    ? '<span class="gc-badge gc-badge-green">✓ Submitted</span>'
+    : '<span class="gc-badge gc-badge-red">✗ Missing</span>';
+
+  tbl.innerHTML = `
+    <thead><tr>
+      <th>Person</th>
+      <th>Actual (${fmtWeekShort(actualWeek)})</th>
+      <th>Forecast (${fmtWeekShort(forecastWeek)})</th>
+      <th>Status</th>
+    </tr></thead>
+    <tbody>${rows.map(({ u, hasA, hasF, done }) => `<tr>
+      <td class="m">${escapeHtml(u.name)}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
+      <td>${check(hasA)}</td>
+      <td>${check(hasF)}</td>
+      <td>${done ? statusBadge('complete') : (hasA || hasF) ? statusBadge('partial') : statusBadge('missing')}</td>
+    </tr>`).join('') || '<tr><td colspan="4" class="gc-empty">No users.</td></tr>'}</tbody>
+  `;
 }
 
 // Shared period helpers: a <select> offers ranges AND single weeks (proper names).
