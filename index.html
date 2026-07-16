@@ -495,10 +495,16 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
       <div class="gc-card">
         <div class="gc-card-header">
           <div>
-            <span class="gc-card-title">Submission check — current cycle</span>
+            <span class="gc-card-title">Submission check</span>
             <div class="gc-card-sub" id="submitStatusSub">Who has submitted what's due this cycle</div>
           </div>
-          <span class="gc-pill" id="submitStatusCount">—</span>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <div class="gc-form-group" style="margin-bottom:0; min-width:280px;">
+              <label>Cycle</label>
+              <select class="gc-select" id="submitStatusCycle" onchange="renderSubmitStatus()"></select>
+            </div>
+            <span class="gc-pill" id="submitStatusCount" style="margin-top:16px;">—</span>
+          </div>
         </div>
         <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="submitStatusTable"></table></div>
       </div>
@@ -1850,7 +1856,21 @@ function renderPeopleMatrix() {
 function renderSubmitStatus() {
   const tbl = document.getElementById('submitStatusTable');
   if (!tbl) return;
-  const forecastWeek = ymd(submitThisMonday());
+  // Cycle picker: current cycle + past ones (a cycle = actual W + forecast W+1).
+  const sel = document.getElementById('submitStatusCycle');
+  const curFw = ymd(submitThisMonday());
+  if (sel && !sel.options.length) {
+    let opts = '';
+    for (let i = 0; i < 26; i++) {
+      const fw = ymd(addDays(parseYmd(curFw), -7 * i));
+      const aw = prevWeekYmd(fw);
+      const lbl = (i === 0 ? 'Current · ' : '') + `Actual W${isoWeekNumber(parseYmd(aw))} (${fmtWeekShort(aw)}) + Forecast W${isoWeekNumber(parseYmd(fw))} (${fmtWeekShort(fw)})`;
+      opts += `<option value="${fw}">${lbl}</option>`;
+    }
+    sel.innerHTML = opts;
+    sel.value = curFw;
+  }
+  const forecastWeek = (sel && sel.value) ? sel.value : curFw;
   const actualWeek = prevWeekYmd(forecastWeek);
   const users = [...state.users].filter(x => (x.status || 'approved') === 'approved');
 
@@ -2457,6 +2477,7 @@ function renderSettings() {
       </td>
       <td>${fmtDate(u.created_at)}</td>
       <td class="r"><div class="gc-row-actions">
+        ${isMe && u.role === 'PL' ? `<button class="gc-btn gc-btn-primary gc-btn-sm" title="Take the Admin role (the current Admin becomes PL)" onclick="selfPromoteToAdmin()">Become Admin</button>` : ''}
         <button class="gc-icon-btn" title="Reset password" onclick="resetUserPassword('${u.id}')">🔑</button>
         ${isMe ? '' : `<button class="gc-icon-btn danger" title="Delete user" onclick="deleteUser('${u.id}')">×</button>`}
       </div></td>
@@ -2567,6 +2588,30 @@ async function changeUserRole(id, role) {
   else u.role = role;
   renderSettings();
   flashNotice(`${u.name} is now ${roleLabel(role)}.`);
+}
+// A PL can take the Admin role themselves; the DB trigger enforces the
+// single-Admin rule and moves the current Admin (if any) back to PL.
+async function selfPromoteToAdmin() {
+  const me = currentUser();
+  if (!me || me.role !== 'PL') return;
+  const currentAdmin = state.users.find(x => x.role === 'Admin' && x.id !== me.id);
+  let msg = 'Take the Admin role?\n\nYou will be able to close and reopen weeks, on top of everything a PL can do.';
+  if (currentAdmin) msg += `\n\nThere can be only one Admin: ${currentAdmin.name} will be moved back to PL.`;
+  if (!confirm(msg)) return;
+  const { error } = await sb.from('profiles').update({ role: 'Admin' }).eq('id', me.id);
+  if (error) { alert('Could not take the Admin role: ' + error.message); return; }
+  // Re-fetch profiles: the trigger auto-demoted the previous Admin (if any).
+  const { data: profiles } = await sb.from('profiles').select('*');
+  if (profiles) {
+    state.users = profiles;
+    const mine = profiles.find(x => x.id === me.id);
+    if (mine) state.currentUser = mine;
+  } else {
+    me.role = 'Admin';
+  }
+  document.getElementById('hdrUserRole').textContent = roleLabel(currentUser().role);
+  renderSettings();
+  flashNotice('You are now the Admin.');
 }
 async function resetUserPassword(id) {
   const u = state.users.find(x => x.id === id);
