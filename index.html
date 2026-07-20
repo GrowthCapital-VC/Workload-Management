@@ -509,73 +509,112 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
 
       <div class="gc-card">
         <div class="gc-card-header">
-          <span class="gc-card-title">Breakdown by project</span>
-          <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="exportProjectBreakdown()">↓ Excel</button>
-        </div>
-        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="projectBreakdownTable"></table></div>
-      </div>
-    </section>
-
-    <!-- ============ BY PERSON (PL) ============ -->
-    <section class="gc-section" id="sec-people">
-      <div class="gc-card">
-        <div class="gc-card-header">
           <div>
-            <span class="gc-card-title">Workload by person</span>
-            <div class="gc-card-sub" id="peopleLoadSub">Actual hours split by Deals vs Projects</div>
+            <span class="gc-card-title">Breakdown by project / deal</span>
+            <div class="gc-card-sub" id="breakdownSub">Hours split across projects and deals</div>
           </div>
           <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
-            <div class="gc-form-group" style="margin-bottom:0; min-width:140px;">
-              <label>Show</label>
-              <select class="gc-select" id="peopleLoadMetric" onchange="renderPeopleLoadChart()">
-                <option value="actual" selected>Actual</option>
-                <option value="forecast">Forecast</option>
-                <option value="both">Actual & forecast</option>
-              </select>
+            <div class="gc-form-group" style="margin-bottom:0; min-width:180px;" id="breakdownUserWrap">
+              <label>Person</label>
+              <select class="gc-select" id="breakdownUser" onchange="renderBreakdown()"></select>
             </div>
             <div class="gc-form-group" style="margin-bottom:0; min-width:220px;">
               <label>Period</label>
-              <select class="gc-select" id="peopleLoadRange" onchange="renderPeopleLoadChart()"></select>
+              <select class="gc-select" id="breakdownRange" onchange="renderBreakdown()"></select>
             </div>
-            <button class="gc-btn gc-btn-ghost gc-btn-sm" id="peopleLoadViewBtn" onclick="togglePeopleLoadView()">↕ Column view</button>
+            <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="exportBreakdown()">↓ Excel</button>
           </div>
         </div>
-        <div class="gc-card-body"><div class="gc-chart-container" style="height:420px;"><canvas id="chartPersonLoad"></canvas></div></div>
+        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="breakdownTable"></table></div>
+      </div>
+
+      <div id="dashTeamViews">
+        <div class="gc-card">
+          <div class="gc-card-header">
+            <div>
+              <span class="gc-card-title">Workload by person</span>
+              <div class="gc-card-sub" id="peopleLoadSub">Actual hours split by Deals vs Projects</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+              <div class="gc-form-group" style="margin-bottom:0; min-width:140px;">
+                <label>Show</label>
+                <select class="gc-select" id="peopleLoadMetric" onchange="renderPeopleLoadChart()">
+                  <option value="actual" selected>Actual</option>
+                  <option value="forecast">Forecast</option>
+                  <option value="both">Actual & forecast</option>
+                </select>
+              </div>
+              <div class="gc-form-group" style="margin-bottom:0; min-width:220px;">
+                <label>Period</label>
+                <select class="gc-select" id="peopleLoadRange" onchange="renderPeopleLoadChart()"></select>
+              </div>
+              <button class="gc-btn gc-btn-ghost gc-btn-sm" id="peopleLoadViewBtn" onclick="togglePeopleLoadView()">↕ Column view</button>
+            </div>
+          </div>
+          <div class="gc-card-body"><div class="gc-chart-container" style="height:420px;"><canvas id="chartPersonLoad"></canvas></div></div>
+        </div>
+
+        <div class="gc-card">
+          <div class="gc-card-header">
+            <div>
+              <span class="gc-card-title">Weekly trend by person</span>
+              <div class="gc-card-sub">Actual vs forecast hours, week by week, for one person</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+              <div class="gc-form-group" style="margin-bottom:0; min-width:200px;">
+                <label>Person</label>
+                <select class="gc-select" id="personTrendUser" onchange="renderPersonTrend()"></select>
+              </div>
+              <div class="gc-form-group" style="margin-bottom:0; min-width:160px;">
+                <label>Weeks</label>
+                <select class="gc-select" id="personTrendRange" onchange="renderPersonTrend()">
+                  <option value="8">Last 8 weeks</option>
+                  <option value="13" selected>Last 13 weeks</option>
+                  <option value="26">Last 26 weeks</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="gc-card-body"><div class="gc-chart-container" style="height:320px;"><canvas id="chartPersonTrend"></canvas></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SUBMISSION STATUS (Admin) ============ -->
+    <section class="gc-section" id="sec-submission">
+      <div class="gc-controls-panel">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px;">
+          <div>
+            <div class="gc-cp-title">Submission Status</div>
+            <div class="gc-cp-sub">Who has submitted this cycle, who to chase, and the week-by-week submission grid.</div>
+          </div>
+          <div class="gc-form-group" style="margin-bottom:0; min-width:300px;">
+            <label>Cycle</label>
+            <select class="gc-select" id="ssCycle" onchange="renderSubmissionStatus()"></select>
+          </div>
+        </div>
+        <hr class="gc-cp-divider">
+        <div class="gc-cp-stats" id="ssStats" style="align-items:flex-start;"></div>
       </div>
 
       <div class="gc-card">
         <div class="gc-card-header">
           <div>
-            <span class="gc-card-title">Weekly trend by person</span>
-            <div class="gc-card-sub">Actual vs forecast hours, week by week, for one person</div>
+            <span class="gc-card-title">Submission check</span>
+            <div class="gc-card-sub" id="ssChecklistSub">—</div>
           </div>
-          <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
-            <div class="gc-form-group" style="margin-bottom:0; min-width:200px;">
-              <label>Person</label>
-              <select class="gc-select" id="personTrendUser" onchange="renderPersonTrend()"></select>
-            </div>
-            <div class="gc-form-group" style="margin-bottom:0; min-width:160px;">
-              <label>Weeks</label>
-              <select class="gc-select" id="personTrendRange" onchange="renderPersonTrend()">
-                <option value="8">Last 8 weeks</option>
-                <option value="13" selected>Last 13 weeks</option>
-                <option value="26">Last 26 weeks</option>
-              </select>
-            </div>
-          </div>
+          <button class="gc-btn gc-btn-ghost gc-btn-sm" id="ssCopyMissing" onclick="copyMissingEmails()">⧉ Copy emails of missing</button>
         </div>
-        <div class="gc-card-body"><div class="gc-chart-container" style="height:320px;"><canvas id="chartPersonTrend"></canvas></div></div>
+        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="ssChecklistTable"></table></div>
       </div>
 
       <div class="gc-card">
         <div class="gc-card-header">
           <div>
-            <span class="gc-card-title">By person</span>
-            <div class="gc-card-sub">Submission status week by week — the number is actual hours logged</div>
+            <span class="gc-card-title">By person — week by week</span>
+            <div class="gc-card-sub">Submission status over the last 8 weeks — the number is actual hours logged</div>
           </div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="exportPeopleMatrix()">↓ Excel</button>
-          </div>
+          <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="exportPeopleMatrix()">↓ Excel</button>
         </div>
         <div style="display:flex; flex-wrap:wrap; gap:16px; padding:12px 18px; margin:0 18px; border-top:1px solid var(--gc-gray-95); font-size:11px; color:var(--gc-gray-40); align-items:center;">
           <span style="display:inline-flex; align-items:center; gap:6px;"><span class="gc-badge gc-badge-green">12h</span> actual + forecast</span>
@@ -585,37 +624,6 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         </div>
         <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="peopleMatrixTable"></table></div>
       </div>
-
-      <div class="gc-card">
-        <div class="gc-card-header">
-          <div>
-            <span class="gc-card-title">Hours breakdown by project / deal</span>
-            <div class="gc-card-sub">How a person's hours split across projects and deals</div>
-          </div>
-          <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
-            <div class="gc-form-group" style="margin-bottom:0; min-width:200px;">
-              <label>Person</label>
-              <select class="gc-select" id="peopleBreakdownUser" onchange="renderPeopleBreakdown()"></select>
-            </div>
-            <div class="gc-form-group" style="margin-bottom:0; min-width:220px;">
-              <label>Period</label>
-              <select class="gc-select" id="peopleBreakdownRange" onchange="renderPeopleBreakdown()"></select>
-            </div>
-            <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="exportPeopleBreakdown()">↓ Excel</button>
-          </div>
-        </div>
-        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="peopleBreakdownTable"></table></div>
-      </div>
-
-      <div class="gc-card">
-        <div class="gc-card-header">
-          <div>
-            <span class="gc-card-title">Deals &amp; projects per person</span>
-            <div class="gc-card-sub">How many active deals/projects each person is a member of</div>
-          </div>
-        </div>
-        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="membershipTable"></table></div>
-      </div>
     </section>
 
     <!-- ============ WEEKLY REVIEW (PL/Admin) ============ -->
@@ -624,33 +632,20 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px;">
           <div>
             <div class="gc-cp-title">Weekly Review</div>
-            <div class="gc-cp-sub">Check who has submitted, follow up with who's missing, review the numbers in the meeting, then close the week.</div>
+            <div class="gc-cp-sub">Review the cycle's numbers in the meeting. (Who's missing lives in the Submission Status tab.)</div>
           </div>
           <div class="gc-form-group" style="margin-bottom:0; min-width:300px;">
             <label>Cycle</label>
             <select class="gc-select" id="reviewCycle" onchange="renderReview()"></select>
           </div>
         </div>
-        <hr class="gc-cp-divider">
-        <div class="gc-cp-stats" id="reviewStats" style="align-items:flex-start;"></div>
-      </div>
-
-      <div class="gc-card">
-        <div class="gc-card-header">
-          <div>
-            <span class="gc-card-title">Submission check</span>
-            <div class="gc-card-sub" id="reviewChecklistSub">—</div>
-          </div>
-          <button class="gc-btn gc-btn-ghost gc-btn-sm" id="reviewCopyMissing" onclick="copyMissingEmails()">⧉ Copy emails of missing</button>
-        </div>
-        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="reviewChecklistTable"></table></div>
       </div>
 
       <div class="gc-card">
         <div class="gc-card-header">
           <div>
             <span class="gc-card-title">Meeting view — by person</span>
-            <div class="gc-card-sub">Hours per person for this cycle · expand a row (▾) for the project split</div>
+            <div class="gc-card-sub">Hours per person for this cycle, and the deals/projects they sit on · expand a row (▾) for the split</div>
           </div>
         </div>
         <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="reviewByPersonTable"></table></div>
@@ -1158,8 +1153,8 @@ function buildTabs() {
     { id: 'history', label: 'History' },
     { id: 'dashboard', label: 'Dashboard' },
   ];
+  if (isAdmin(u)) tabs.push({ id: 'submission', label: 'Submission Status' });
   if (isPL(u)) {
-    tabs.push({ id: 'people', label: 'By Person' });
     tabs.push({ id: 'review', label: 'Weekly Review' });
     tabs.push({ id: 'projects', label: 'Projects' });
     tabs.push({ id: 'settings', label: 'Team & Setup' });
@@ -1185,7 +1180,7 @@ function renderActiveSection() {
   if (t === 'submit') renderSubmit();
   else if (t === 'history') renderHistory();
   else if (t === 'dashboard') renderDashboard();
-  else if (t === 'people') renderPeopleMatrix();
+  else if (t === 'submission') renderSubmissionStatus();
   else if (t === 'review') renderReview();
   else if (t === 'projects') renderProjects();
   else if (t === 'settings') renderSettings();
@@ -1785,37 +1780,12 @@ function renderDashboard() {
   drawDoughnut('chartByProject', byProject.map(x => x.name), byProject.map(x => x.hours));
 
   renderWeekTrend(); // independent of the range above
+  renderBreakdown(); // merged project/deal breakdown with its own person + period filters
 
-  const tbl = document.getElementById('projectBreakdownTable');
-  const projectAgg = {};
-  for (const p of sortedProjects(state.projects)) projectAgg[p.id] = { name: p.name, code: p.code, type: p.type || 'Project', actual: 0, forecast: 0 };
-  actualRecs.forEach(r => r.entries.forEach(e => { if (projectAgg[e.project_id]) projectAgg[e.project_id].actual += e.hours; }));
-  forecastRecs.forEach(r => r.entries.forEach(e => { if (projectAgg[e.project_id]) projectAgg[e.project_id].forecast += e.hours; }));
-  const arr = Object.values(projectAgg).filter(x => x.actual > 0 || x.forecast > 0);
-  const tot = arr.reduce((s, x) => s + x.actual, 0);
-  const rows = arr.map(x => {
-    const variance = x.forecast > 0 ? ((x.actual - x.forecast) / x.forecast) * 100 : null;
-    const share = tot > 0 ? (x.actual / tot * 100) : 0;
-    return `<tr>
-      <td>${projectTypeBadge(x.type)}</td>
-      <td class="m">${escapeHtml(x.name)} ${x.code?`<span style="color:var(--gc-gray-60);font-size:11px;">${escapeHtml(x.code)}</span>`:''}</td>
-      <td class="r m">${fmtHours(x.actual)}</td>
-      <td class="r">${fmtHours(x.forecast)}</td>
-      <td class="r">${variance==null?'—':(variance>=0?'+':'')+variance.toFixed(0)+'%'}</td>
-      <td class="r">${share.toFixed(0)}%</td>
-    </tr>`;
-  }).join('');
-  tbl.innerHTML = `
-    <thead><tr>
-      <th>Type</th>
-      <th>Name</th>
-      <th class="r">Actual</th>
-      <th class="r">Forecast</th>
-      <th class="r">Var % ${infoTip('How far actual came out from forecast: (actual − forecast) ÷ forecast. Positive = more hours than planned.')}</th>
-      <th class="r">Share ${infoTip('This item’s slice of all actual hours in the selected range.')}</th>
-    </tr></thead>
-    <tbody>${rows || '<tr><td colspan="6" class="gc-empty">No data in the selected range.</td></tr>'}</tbody>
-  `;
+  // Team-wide per-person views (hidden for GC Users, who only see their own data).
+  const teamWrap = document.getElementById('dashTeamViews');
+  if (teamWrap) teamWrap.style.display = pl ? '' : 'none';
+  if (pl) { renderPeopleLoadChart(); renderPersonTrend(); }
 }
 
 function sumEntries(recs) {
@@ -1928,35 +1898,6 @@ function renderPeopleMatrix() {
   }).join('');
 
   tbl.innerHTML = `<thead><tr>${headerCells}</tr></thead><tbody>${rows || '<tr><td colspan="11" class="gc-empty">No users.</td></tr>'}</tbody>`;
-
-  renderPeopleLoadChart();
-  renderPersonTrend();
-  renderPeopleBreakdown();
-  renderMembership();
-}
-
-// ── Deals & projects each person is a member of (active items only) ──
-function renderMembership() {
-  const tbl = document.getElementById('membershipTable');
-  if (!tbl) return;
-  const users = [...state.users].filter(x => (x.status || 'approved') === 'approved').sort((a,b)=>a.name.localeCompare(b.name));
-  const active = state.projects.filter(p => p.status === 'active');
-  const rows = users.map(u => {
-    const mine = active.filter(p => Array.isArray(p.members) && p.members.includes(u.id));
-    const deals = mine.filter(p => (p.type || 'Project') === 'Deal');
-    const projs = mine.filter(p => (p.type || 'Project') !== 'Deal');
-    return { u, deals, projs };
-  }).sort((a,b) => (b.deals.length - a.deals.length) || (b.projs.length - a.projs.length) || a.u.name.localeCompare(b.u.name));
-
-  tbl.innerHTML = `
-    <thead><tr><th>Person</th><th class="r">Deals</th><th class="r">Projects</th><th>Member of</th></tr></thead>
-    <tbody>${rows.map(({ u, deals, projs }) => `<tr>
-      <td class="m">${escapeHtml(u.name)}</td>
-      <td class="r m">${deals.length}</td>
-      <td class="r">${projs.length}</td>
-      <td style="font-size:12px;color:var(--gc-gray-40)">${[...deals, ...projs].map(p => escapeHtml(p.name)).join(', ') || '<span style="color:var(--gc-gray-60)">—</span>'}</td>
-    </tr>`).join('') || '<tr><td colspan="4" class="gc-empty">No users.</td></tr>'}</tbody>
-  `;
 }
 
 // Shared period helpers: a <select> offers ranges AND single weeks (proper names).
@@ -2154,66 +2095,83 @@ function renderPersonTrend() {
   });
 }
 
-// ── By Person: hours split across projects/deals ─────────────
-function peopleBreakdownData() {
-  const userSel = document.getElementById('peopleBreakdownUser');
-  const rangeSel = document.getElementById('peopleBreakdownRange');
-  const weeks = new Set(periodWeeks(rangeSel ? rangeSel.value : 'r:4'));
-  const userId = userSel.value || '__all';
-  const recs = state.records.filter(r => r.type === 'actual' && weeks.has(r.week_start)
-    && (userId === '__all' || r.user_id === userId));
-  const fRecs = state.records.filter(r => r.type === 'forecast' && weeks.has(r.week_start)
-    && (userId === '__all' || r.user_id === userId));
+// ── Breakdown by project/deal (Dashboard) — person + period filters ──
+// Merges the old dashboard "Breakdown by project" with the per-person one.
+function breakdownData() {
+  const me = currentUser();
+  const pl = isPL(me);
+  const userSel = document.getElementById('breakdownUser');
+  const rangeSel = document.getElementById('breakdownRange');
+  const userId = pl ? ((userSel && userSel.value) || '__all') : (me ? me.id : '__all');
+  const rv = rangeSel ? rangeSel.value : 'r:13';
+  const weekSet = (rv === 'all') ? null : new Set(periodWeeks(rv));
+  const inScope = (r) => (userId === '__all' || r.user_id === userId) && (!weekSet || weekSet.has(r.week_start));
   const map = {};
-  const add = (list, key) => list.forEach(r => r.entries.forEach(e => {
-    if (!map[e.project_id]) map[e.project_id] = { actual: 0, forecast: 0 };
-    map[e.project_id][key] += Number(e.hours) || 0;
+  const add = (type) => state.records.filter(r => r.type === type && inScope(r)).forEach(r => r.entries.forEach(e => {
+    (map[e.project_id] = map[e.project_id] || { actual: 0, forecast: 0 })[type] += Number(e.hours) || 0;
   }));
-  add(recs, 'actual'); add(fRecs, 'forecast');
+  add('actual'); add('forecast');
   const rows = Object.entries(map).map(([pid, v]) => {
     const p = state.projects.find(x => x.id === pid);
     return { name: p ? p.name : '(deleted)', code: p ? (p.code || '') : '', type: p ? (p.type || 'Project') : 'Project',
              order: p ? (p.order || 0) : 9999, actual: v.actual, forecast: v.forecast };
   }).filter(r => r.actual > 0 || r.forecast > 0)
-    .sort((a,b) => (a.order - b.order) || a.name.localeCompare(b.name));
-  const totalA = rows.reduce((s,r)=>s+r.actual,0);
+    .sort((a, b) => (a.order - b.order) || a.name.localeCompare(b.name));
+  const totalA = rows.reduce((s, r) => s + r.actual, 0);
   return { rows, totalA, userId };
 }
 
-function renderPeopleBreakdown() {
-  const sel = document.getElementById('peopleBreakdownUser');
-  if (!sel) return;
-  const rangeSel = document.getElementById('peopleBreakdownRange');
-  if (rangeSel && !rangeSel.options.length) populatePeriodSelect(rangeSel, 'r:4');
-  const users = [...state.users].filter(x => (x.status || 'approved') === 'approved').sort((a,b)=>a.name.localeCompare(b.name));
-  if (sel.options.length !== users.length + 1) {
-    const cur = sel.value;
-    sel.innerHTML = '<option value="__all">All team</option>' +
-      users.map(x => `<option value="${x.id}">${escapeHtml(x.name)}</option>`).join('');
-    sel.value = cur || '__all';
+function renderBreakdown() {
+  const pl = isPL(currentUser());
+  const userSel = document.getElementById('breakdownUser');
+  const rangeSel = document.getElementById('breakdownRange');
+  if (!userSel || !rangeSel) return;
+  // Period: All time + ranges + single weeks.
+  if (!rangeSel.options.length) {
+    const weeks = lastNMondays(52).slice().reverse();
+    const ranges = [4, 8, 13, 26, 52].map(n => `<option value="r:${n}">Last ${n} weeks</option>`).join('');
+    const singles = weeks.map(w => `<option value="w:${w}">W${isoWeekNumber(parseYmd(w))} · ${fmtWeekRange(w)}</option>`).join('');
+    rangeSel.innerHTML = `<option value="all">All time</option><optgroup label="Ranges">${ranges}</optgroup><optgroup label="Single week">${singles}</optgroup>`;
+    rangeSel.value = 'r:13';
   }
-  const { rows, totalA } = peopleBreakdownData();
+  // Person filter — PL/Admin only; GC Users are locked to their own data.
+  const userWrap = document.getElementById('breakdownUserWrap');
+  if (userWrap) userWrap.style.display = pl ? '' : 'none';
+  if (pl) {
+    const approved = [...state.users].filter(x => (x.status || 'approved') === 'approved').sort((a, b) => a.name.localeCompare(b.name));
+    if (userSel.options.length !== approved.length + 1) {
+      const cur = userSel.value;
+      userSel.innerHTML = '<option value="__all">All team</option>' + approved.map(x => `<option value="${x.id}">${escapeHtml(x.name)}</option>`).join('');
+      userSel.value = cur || '__all';
+    }
+  }
+  const { rows, totalA } = breakdownData();
+  const rv = rangeSel.value;
+  const sub = document.getElementById('breakdownSub');
+  if (sub) sub.textContent = 'Hours split across projects and deals · ' + (rv === 'all' ? 'all time' : periodLabel(periodWeeks(rv)));
   const body = rows.map(r => {
+    const variance = r.forecast > 0 ? ((r.actual - r.forecast) / r.forecast) * 100 : null;
     const share = totalA > 0 ? (r.actual / totalA * 100) : 0;
     return `<tr>
       <td>${projectTypeBadge(r.type)}</td>
       <td class="m">${escapeHtml(r.name)}${r.code ? ` <span class="proj-code">${escapeHtml(r.code)}</span>` : ''}</td>
       <td class="r m">${fmtHours(r.actual)}</td>
       <td class="r">${fmtHours(r.forecast)}</td>
+      <td class="r">${variance == null ? '—' : (variance >= 0 ? '+' : '') + variance.toFixed(0) + '%'}</td>
       <td class="r">${share.toFixed(0)}%</td>
     </tr>`;
   }).join('');
-  document.getElementById('peopleBreakdownTable').innerHTML = `
-    <thead><tr><th>Type</th><th>Project / Deal</th><th class="r">Actual</th><th class="r">Forecast</th><th class="r">Share ${infoTip('This item’s slice of the person’s total actual hours in the selected period.')}</th></tr></thead>
-    <tbody>${body || '<tr><td colspan="5" class="gc-empty">No hours logged in this period.</td></tr>'}</tbody>
+  document.getElementById('breakdownTable').innerHTML = `
+    <thead><tr><th>Type</th><th>Project / Deal</th><th class="r">Actual</th><th class="r">Forecast</th><th class="r">Var % ${infoTip('How far actual came out from forecast: (actual − forecast) ÷ forecast.')}</th><th class="r">Share ${infoTip('This item’s slice of total actual hours in the current filter.')}</th></tr></thead>
+    <tbody>${body || '<tr><td colspan="6" class="gc-empty">No hours logged for this filter.</td></tr>'}</tbody>
   `;
 }
 
-function exportPeopleBreakdown() {
-  const { rows, userId } = peopleBreakdownData();
-  const who = userId === '__all' ? 'All_team' : ((state.users.find(x=>x.id===userId)||{}).name || 'User').replace(/\s+/g,'_');
-  const data = [['Project / Deal', 'Type', 'Code', 'Actual hours', 'Forecast hours']];
-  rows.forEach(r => data.push([r.name, r.type, r.code, r.actual, r.forecast]));
+function exportBreakdown() {
+  const { rows, userId } = breakdownData();
+  const who = userId === '__all' ? 'All_team' : ((state.users.find(x => x.id === userId) || {}).name || 'You').replace(/\s+/g, '_');
+  const data = [['Type', 'Project / Deal', 'Code', 'Actual (h)', 'Forecast (h)']];
+  rows.forEach(r => data.push([r.type, r.name, r.code, r.actual, r.forecast]));
   downloadXlsx(`breakdown_${who}.xlsx`, 'Breakdown', data);
 }
 
@@ -2223,44 +2181,50 @@ function exportPeopleBreakdown() {
 function nextWeekYmd(week) { return ymd(addDays(parseYmd(week), 7)); }
 
 // The cycle selected in the Weekly Review tab: actual week + forecast week.
-function reviewCycleWeeks() {
-  const sel = document.getElementById('reviewCycle');
+// ── Cycle helpers (shared by Submission Status & Weekly Review) ──
+function cycleWeeksOf(selId) {
+  const sel = document.getElementById(selId);
   const curFw = ymd(submitThisMonday());
   const fw = (sel && sel.value) ? sel.value : curFw;
   return { forecastWeek: fw, actualWeek: prevWeekYmd(fw), isCurrent: fw === curFw };
 }
-
-function reviewChecklistRows() {
-  const { forecastWeek, actualWeek } = reviewCycleWeeks();
+function populateCyclePicker(sel) {
+  if (!sel || sel.options.length) return;
+  const curFw = ymd(submitThisMonday());
+  let opts = '';
+  for (let i = 0; i < 26; i++) {
+    const fw = ymd(addDays(parseYmd(curFw), -7 * i));
+    const aw = prevWeekYmd(fw);
+    opts += `<option value="${fw}">${(i === 0 ? 'Current · ' : '')}Actual W${isoWeekNumber(parseYmd(aw))} (${fmtWeekShort(aw)}) + Forecast W${isoWeekNumber(parseYmd(fw))} (${fmtWeekShort(fw)})</option>`;
+  }
+  sel.innerHTML = opts;
+  sel.value = curFw;
+}
+function checklistRowsFor(actualWeek, forecastWeek) {
   const users = [...state.users].filter(x => (x.status || 'approved') === 'approved');
   const rows = users.map(u => {
     const a = findRecord(u.id, actualWeek, 'actual');
     const f = findRecord(u.id, forecastWeek, 'forecast');
     return { u, a, f, done: !!(a && f) };
   });
-  // Whoever is missing something floats to the top; then alphabetical.
-  rows.sort((x, y) => (x.done - y.done) || x.u.name.localeCompare(y.u.name));
+  rows.sort((x, y) => (x.done - y.done) || x.u.name.localeCompare(y.u.name)); // missing first
   return rows;
 }
+// Active deals/projects a user is a member of.
+function membershipOf(userId) {
+  const active = state.projects.filter(p => p.status === 'active' && Array.isArray(p.members) && p.members.includes(userId));
+  return { deals: active.filter(p => (p.type || 'Project') === 'Deal'), projects: active.filter(p => (p.type || 'Project') !== 'Deal') };
+}
 
-function renderReview() {
+// =========================================================
+// SUBMISSION STATUS (Admin) — cycle stats + checklist + week grid
+// =========================================================
+function renderSubmissionStatus() {
   const me = currentUser();
-  const sel = document.getElementById('reviewCycle');
-  const curFw = ymd(submitThisMonday());
-  if (sel && !sel.options.length) {
-    let opts = '';
-    for (let i = 0; i < 26; i++) {
-      const fw = ymd(addDays(parseYmd(curFw), -7 * i));
-      const aw = prevWeekYmd(fw);
-      const lbl = (i === 0 ? 'Current · ' : '') + `Actual W${isoWeekNumber(parseYmd(aw))} (${fmtWeekShort(aw)}) + Forecast W${isoWeekNumber(parseYmd(fw))} (${fmtWeekShort(fw)})`;
-      opts += `<option value="${fw}">${lbl}</option>`;
-    }
-    sel.innerHTML = opts;
-    sel.value = curFw;
-  }
-  const { forecastWeek, actualWeek, isCurrent } = reviewCycleWeeks();
+  populateCyclePicker(document.getElementById('ssCycle'));
+  const { forecastWeek, actualWeek, isCurrent } = cycleWeeksOf('ssCycle');
   const closed = isWeekClosed(actualWeek);
-  const rows = reviewChecklistRows();
+  const rows = checklistRowsFor(actualWeek, forecastWeek);
   const doneCount = rows.filter(r => r.done).length;
   const allDone = doneCount === rows.length && rows.length > 0;
 
@@ -2279,7 +2243,7 @@ function renderReview() {
   const closeBtn = isAdmin(me)
     ? `<div><button class="gc-btn ${closed ? 'gc-btn-secondary' : 'gc-btn-primary'}" onclick="toggleWeekClosed('${actualWeek}')">${closed ? '🔓 Reopen week' : '🔒 Close week'}</button></div>`
     : '';
-  document.getElementById('reviewStats').innerHTML = `
+  document.getElementById('ssStats').innerHTML = `
     <div><div class="gc-cp-stat-label">Complete ${infoTip('People who have submitted both the actual for the finished week and the forecast for the next one.')}</div>
       <div class="gc-cp-stat-value ${allDone ? 'lime' : 'wh'}">${doneCount}/${rows.length}</div>
       <div class="review-progress"><div style="width:${pct}%"></div></div></div>
@@ -2291,13 +2255,12 @@ function renderReview() {
     ${closeBtn}
   `;
 
-  // ── Submission checklist ────────────────────────────────────
-  document.getElementById('reviewChecklistSub').textContent =
+  // Submission checklist (missing first, with note + Remind)
+  document.getElementById('ssChecklistSub').textContent =
     `Actual for ${fmtWeekRange(actualWeek)} + forecast for ${fmtWeekRange(forecastWeek)} · missing people first`;
   const missing = rows.filter(r => !r.done);
-  const copyBtn = document.getElementById('reviewCopyMissing');
+  const copyBtn = document.getElementById('ssCopyMissing');
   if (copyBtn) { copyBtn.style.display = missing.length ? '' : 'none'; copyBtn.textContent = `⧉ Copy emails of missing (${missing.length})`; }
-
   const check = ok => ok
     ? '<span class="gc-badge gc-badge-green">✓ Submitted</span>'
     : '<span class="gc-badge gc-badge-red">✗ Missing</span>';
@@ -2309,7 +2272,7 @@ function renderReview() {
     if (nf) parts.push(`<div><span style="color:var(--gc-gray-60)">${fmtWeekShort(forecastWeek)}:</span> ${escapeHtml(nf)}</div>`);
     return parts.length ? `<div style="font-size:12px;color:var(--gc-gray-30);max-width:320px;">${parts.join('')}</div>` : '<span style="color:var(--gc-gray-60)">—</span>';
   };
-  document.getElementById('reviewChecklistTable').innerHTML = `
+  document.getElementById('ssChecklistTable').innerHTML = `
     <thead><tr>
       <th>Person</th>
       <th>Actual (${fmtWeekShort(actualWeek)})</th>
@@ -2328,24 +2291,35 @@ function renderReview() {
     </tr>`).join('') || '<tr><td colspan="6" class="gc-empty">No users.</td></tr>'}</tbody>
   `;
 
-  // ── Meeting view: by person ─────────────────────────────────
+  renderPeopleMatrix();
+}
+
+function renderReview() {
+  populateCyclePicker(document.getElementById('reviewCycle'));
+  const { forecastWeek, actualWeek } = cycleWeeksOf('reviewCycle');
+  const rows = checklistRowsFor(actualWeek, forecastWeek);
+
+  // ── Meeting view: by person (+ deals/projects membership) ───
   const byName = [...rows].sort((x, y) => x.u.name.localeCompare(y.u.name));
   let totA = 0, totF = 0;
   const personRows = byName.map(({ u, a, f }) => {
     const aH = a ? a.entries.reduce((s, e) => s + e.hours, 0) : null;
     const fH = f ? f.entries.reduce((s, e) => s + e.hours, 0) : null;
     totA += aH || 0; totF += fH || 0;
+    const m = membershipOf(u.id);
+    const names = [...m.deals, ...m.projects].map(p => p.name).join(', ') || 'none';
     return `<tr>
       <td class="m">${escapeHtml(u.name)}</td>
       <td class="r m">${aH == null ? '—' : fmtHours(aH)}</td>
       <td class="r">${fH == null ? '—' : fmtHours(fH)}</td>
+      <td class="c" title="${escapeHtml(names)}"><span class="gc-badge gc-badge-blue">${m.deals.length} deal${m.deals.length === 1 ? '' : 's'}</span> <span class="gc-badge gc-badge-lime">${m.projects.length} proj</span></td>
       <td class="r"><button class="gc-icon-btn" title="Project detail" onclick="toggleReviewDetail('${u.id}', this)">▾</button></td>
     </tr>`;
   }).join('');
   document.getElementById('reviewByPersonTable').innerHTML = `
-    <thead><tr><th>Person</th><th class="r">Actual (${fmtWeekShort(actualWeek)})</th><th class="r">Forecast (${fmtWeekShort(forecastWeek)})</th><th class="r">Detail</th></tr></thead>
-    <tbody>${personRows || '<tr><td colspan="4" class="gc-empty">No users.</td></tr>'}
-    ${personRows ? `<tr class="total-row"><td>Total</td><td class="r">${fmtHours(totA)}</td><td class="r">${fmtHours(totF)}</td><td></td></tr>` : ''}</tbody>
+    <thead><tr><th>Person</th><th class="r">Actual (${fmtWeekShort(actualWeek)})</th><th class="r">Forecast (${fmtWeekShort(forecastWeek)})</th><th class="c">Deals / projects <span class="info-tip" data-tip="Active deals and projects this person is a member of. Hover the badges to see the names.">i</span></th><th class="r">Detail</th></tr></thead>
+    <tbody>${personRows || '<tr><td colspan="5" class="gc-empty">No users.</td></tr>'}
+    ${personRows ? `<tr class="total-row"><td>Total</td><td class="r">${fmtHours(totA)}</td><td class="r">${fmtHours(totF)}</td><td></td><td></td></tr>` : ''}</tbody>
   `;
 
   // ── Meeting view: by project / deal ─────────────────────────
@@ -2376,7 +2350,7 @@ function toggleReviewDetail(user_id, btn) {
   const tr = btn.closest('tr');
   const next = tr.nextElementSibling;
   if (next && next.classList.contains('detail-row')) { next.remove(); btn.textContent = '▾'; return; }
-  const { forecastWeek, actualWeek } = reviewCycleWeeks();
+  const { forecastWeek, actualWeek } = cycleWeeksOf('reviewCycle');
   const a = findRecord(user_id, actualWeek, 'actual');
   const f = findRecord(user_id, forecastWeek, 'forecast');
   const projMap = {}; state.projects.forEach(p => projMap[p.id] = p);
@@ -2397,7 +2371,7 @@ function toggleReviewDetail(user_id, btn) {
   const inner = detailTable + (notes.length ? `<div style="padding:10px 14px;font-size:12px;color:var(--gc-gray-30);border-top:1px solid var(--gc-gray-95);">${notes.join('<br>')}</div>` : '');
   const newRow = document.createElement('tr');
   newRow.className = 'detail-row';
-  newRow.innerHTML = `<td colspan="4">${inner}</td>`;
+  newRow.innerHTML = `<td colspan="5">${inner}</td>`;
   tr.parentNode.insertBefore(newRow, tr.nextSibling);
   btn.textContent = '▴';
 }
@@ -2406,7 +2380,7 @@ function toggleReviewDetail(user_id, btn) {
 function remindUser(id) {
   const u = state.users.find(x => x.id === id);
   if (!u) return;
-  const { forecastWeek, actualWeek } = reviewCycleWeeks();
+  const { forecastWeek, actualWeek } = cycleWeeksOf('ssCycle');
   const first = (u.name || '').split(' ')[0];
   const subject = encodeURIComponent('Reminder: workload submission');
   const body = encodeURIComponent(
@@ -2417,7 +2391,8 @@ function remindUser(id) {
   location.href = `mailto:${u.email}?subject=${subject}&body=${body}`;
 }
 function copyMissingEmails() {
-  const missing = reviewChecklistRows().filter(r => !r.done).map(r => r.u.email);
+  const { forecastWeek, actualWeek } = cycleWeeksOf('ssCycle');
+  const missing = checklistRowsFor(actualWeek, forecastWeek).filter(r => !r.done).map(r => r.u.email);
   if (!missing.length) { flashNotice('Everyone has submitted — nothing to copy.'); return; }
   const text = missing.join('; ');
   const done = () => flashNotice(`${missing.length} address${missing.length === 1 ? '' : 'es'} copied — paste into an email or Teams.`);
@@ -2813,25 +2788,6 @@ async function deleteUser(id) {
 // =========================================================
 // EXPORT
 // =========================================================
-function exportProjectBreakdown() {
-  const rangeSel = document.getElementById('dashRange');
-  const weeks = periodWeeks(rangeSel ? rangeSel.value : 'r:13');
-  const weekSet = new Set(weeks);
-  const scoped = dashboardScopeRecords();
-  const actualRecs = scoped.filter(r => r.type === 'actual' && weekSet.has(r.week_start));
-  const forecastRecs = scoped.filter(r => r.type === 'forecast' && weekSet.has(r.week_start));
-  const data = [['Type','Name','Code','Actual (h)','Forecast (h)','Variance (h)','Variance %']];
-  const map = {};
-  for (const p of sortedProjects(state.projects)) map[p.id] = { name:p.name, code:p.code||'', type:p.type||'Project', actual:0, forecast:0 };
-  actualRecs.forEach(r => r.entries.forEach(e => { if (map[e.project_id]) map[e.project_id].actual += e.hours; }));
-  forecastRecs.forEach(r => r.entries.forEach(e => { if (map[e.project_id]) map[e.project_id].forecast += e.hours; }));
-  Object.values(map).filter(x => x.actual>0||x.forecast>0).forEach(x => {
-    const delta = x.actual - x.forecast;
-    const pct = x.forecast > 0 ? (delta/x.forecast)*100 : '';
-    data.push([x.type, x.name, x.code, x.actual, x.forecast, delta, pct]);
-  });
-  downloadXlsx(`workload_breakdown_${weeks[0]}.xlsx`, 'Breakdown', data);
-}
 function exportPeopleMatrix() {
   const weeks = lastNMondays(13);
   const header = ['Person','Email','Role', ...weeks.flatMap(w => [`${fmtWeekShort(w)} A`, `${fmtWeekShort(w)} F`])];
