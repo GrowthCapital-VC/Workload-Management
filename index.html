@@ -192,9 +192,14 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
 
 .submit-grid { display:grid; grid-template-columns: 1fr 1fr; gap:20px; position:relative; }
 @media (max-width:900px){ .submit-grid { grid-template-columns:1fr; } }
-.copy-arrow { position:absolute; left:50%; top:28px; transform:translate(-50%,-50%); z-index:5; width:36px; height:36px; border-radius:50%; border:1px solid var(--gc-gray-90); background:white; color:var(--gc-gray-10); font-size:17px; font-weight:700; line-height:1; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.15); display:flex; align-items:center; justify-content:center; transition:background .15s,transform .15s; }
-.copy-arrow:hover { background:var(--gc-lime); transform:translate(-50%,-50%) scale(1.08); }
-@media (max-width:900px){ .copy-arrow { position:static; transform:none; margin:6px auto; } .copy-arrow:hover { transform:scale(1.08); } }
+.copy-btn { position:absolute; left:50%; top:32px; transform:translate(-50%,-50%); z-index:5; display:inline-flex; align-items:center; gap:7px; padding:9px 16px; border-radius:999px; border:1px solid var(--gc-gray-90); background:white; color:var(--gc-gray-10); font-family:'Montserrat',sans-serif; font-size:11px; font-weight:700; letter-spacing:.3px; white-space:nowrap; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.15); transition:background .15s,transform .15s; }
+.copy-btn .arr { font-size:15px; line-height:1; }
+.copy-btn:hover { background:var(--gc-lime); transform:translate(-50%,-50%) scale(1.05); }
+@media (max-width:900px){
+  .copy-btn { position:static; transform:none; margin:0 auto; order:2; width:max-content; }
+  .copy-btn:hover { transform:scale(1.05); }
+  .submit-col.actual { order:1; } .submit-col.forecast { order:3; }
+}
 .submit-col { background:white; border:1px solid var(--gc-gray-90); border-radius:var(--radius); overflow:hidden; }
 .submit-col.actual .submit-col-head { background:#EAF4FE; color:#1F4E8C; }
 .submit-col.forecast .submit-col-head { background:#EDFBBD; color:#3E4C0A; }
@@ -219,6 +224,32 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
 .hr-btn:disabled { opacity:.4; cursor:not-allowed; }
 .hr-step input[type=number]::-webkit-inner-spin-button, .hr-step input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
 .hr-step input[type=number] { -moz-appearance:textfield; }
+.submit-comment { padding:12px 18px 16px; border-top:1px solid var(--gc-gray-95); }
+.submit-comment label { display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:1px; color:var(--gc-gray-40); margin-bottom:6px; }
+.submit-comment textarea { width:100%; resize:vertical; min-height:42px; }
+.pm-members { max-height:170px; overflow:auto; border:1px solid var(--gc-gray-80); border-radius:6px; padding:8px 10px; display:flex; flex-direction:column; gap:6px; }
+.pm-members label { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:500; cursor:pointer; }
+.pm-members input { width:auto; }
+
+.submit-col-head .col-hint { font-size:11px; margin-top:4px; opacity:.72; font-weight:500; }
+
+/* "This cycle" submitted/missing pills */
+.cycle-pill { display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:999px; font-size:11px; font-weight:700; letter-spacing:.3px; }
+.cycle-pill.done { background:rgba(196,242,34,0.18); color:var(--gc-lime); border:1px solid rgba(196,242,34,0.4); }
+.cycle-pill.miss { background:rgba(255,138,128,0.15); color:#FF8A80; border:1px solid rgba(255,138,128,0.4); }
+
+/* ⓘ info tooltip — custom bubble with data-tip, native title fallback inside scroll containers */
+.info-tip { position:relative; display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; flex:0 0 14px; border-radius:50%; background:var(--gc-gray-80); color:white; font-size:9px; font-weight:700; font-family:'Space Grotesk',sans-serif; font-style:normal; cursor:help; vertical-align:middle; margin-left:5px; text-transform:none; letter-spacing:0; }
+.info-tip[data-tip]::after { content:attr(data-tip); position:absolute; bottom:calc(100% + 7px); left:50%; transform:translateX(-50%); background:var(--gc-gray-10); color:white; padding:9px 11px; border-radius:6px; font-size:11px; font-weight:500; font-family:'Montserrat',sans-serif; width:230px; white-space:normal; text-align:left; line-height:1.45; text-transform:none; letter-spacing:0; opacity:0; visibility:hidden; transition:opacity .15s; z-index:400; box-shadow:var(--shadow-lg); pointer-events:none; }
+.info-tip[data-tip]:hover::after { opacity:1; visibility:visible; }
+.gc-controls-panel .info-tip { background:rgba(255,255,255,0.25); }
+
+/* "How it works" modal steps */
+.help-step { display:flex; gap:14px; padding:12px 0; border-bottom:1px solid var(--gc-gray-95); font-size:13px; }
+.help-step:last-child { border-bottom:none; padding-bottom:0; }
+.help-step:first-child { padding-top:0; }
+.help-num { flex:0 0 26px; height:26px; border-radius:50%; background:var(--gc-blue); color:white; font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; }
+.help-sub { color:var(--gc-gray-40); font-size:12px; line-height:1.55; display:block; margin-top:2px; }
 
 .notice { padding:12px 16px; border-radius:8px; font-size:12px; margin-bottom:16px; display:flex; align-items:center; gap:10px; }
 .notice-info { background:#EAF4FE; color:#1F4E8C; border-left:3px solid var(--gc-blue); }
@@ -328,6 +359,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         <span class="gc-logo-sep">Workload</span>
       </div>
       <div class="gc-header-actions">
+        <button class="gc-btn gc-btn-secondary" onclick="openHelp()" title="A quick guide to the weekly cycle">? How it works</button>
         <div class="gc-user-chip">
           <div>
             <div class="gc-user-name" id="hdrUserName"></div>
@@ -354,20 +386,26 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         <div class="gc-cp-stats" id="submitStats"></div>
       </div>
 
+      <div id="welcomeNotice"></div>
       <div id="submitNotice"></div>
       <div id="carryNotice"></div>
 
       <div class="submit-grid">
-        <button type="button" class="copy-arrow" id="copyAtoF" onclick="copyActualToForecast()" title="Copy all Actual hours into Forecast as a starting point for next week" aria-label="Copy Actual hours into Forecast">→</button>
+        <button type="button" class="copy-btn" id="copyAtoF" onclick="copyActualToForecast()" title="Use the hours you just logged as the starting point for next week's forecast" aria-label="Copy Actual hours into Forecast">Copy Actual <span class="arr">→</span> Forecast</button>
         <div class="submit-col actual">
           <div class="submit-col-head">
             <div class="ttl">Actual</div>
             <div class="week-of" id="actualWeekOf">—</div>
+            <div class="col-hint">The hours you really worked, per project</div>
           </div>
           <div class="submit-rows" id="actualRows"></div>
           <div class="submit-foot">
             <span class="lbl">Total hours</span>
             <span class="val" id="actualTotal">0</span>
+          </div>
+          <div class="submit-comment">
+            <label for="actualComment">Note for this week (optional)</label>
+            <textarea id="actualComment" class="gc-input" rows="2" placeholder="e.g. 3 days off this week"></textarea>
           </div>
         </div>
 
@@ -375,11 +413,16 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
           <div class="submit-col-head">
             <div class="ttl">Forecast</div>
             <div class="week-of" id="forecastWeekOf">—</div>
+            <div class="col-hint">The hours you expect to work, per project</div>
           </div>
           <div class="submit-rows" id="forecastRows"></div>
           <div class="submit-foot">
             <span class="lbl">Total hours</span>
             <span class="val" id="forecastTotal">0</span>
+          </div>
+          <div class="submit-comment">
+            <label for="forecastComment">Note for this week (optional)</label>
+            <textarea id="forecastComment" class="gc-input" rows="2" placeholder="e.g. holidays, conference, onboarding…"></textarea>
           </div>
         </div>
       </div>
@@ -597,6 +640,16 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         </div>
         <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="peopleBreakdownTable"></table></div>
       </div>
+
+      <div class="gc-card">
+        <div class="gc-card-header">
+          <div>
+            <span class="gc-card-title">Deals &amp; projects per person</span>
+            <div class="gc-card-sub">How many active deals/projects each person is a member of</div>
+          </div>
+        </div>
+        <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="membershipTable"></table></div>
+      </div>
     </section>
 
     <!-- ============ VARIANCE (PL) ============ -->
@@ -758,6 +811,11 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
           <option value="archived">Archived</option>
         </select>
       </div>
+      <div class="gc-form-group">
+        <label>Team members (participants)</label>
+        <div id="pm_members" class="pm-members"></div>
+        <div style="font-size:11px; color:var(--gc-gray-60); margin-top:6px;">Who works on this deal/project. Used in the "Deals &amp; projects per person" view.</div>
+      </div>
     </div>
     <div class="gc-modal-footer">
       <button class="gc-btn gc-btn-secondary" style="color:var(--gc-gray-40)" onclick="closeModal('projectModal')">Cancel</button>
@@ -799,10 +857,53 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
           </div>
         </div>
       </div>
+      <div class="gc-form-group" style="margin-top:14px;">
+        <label>Note for this week</label>
+        <textarea id="erm_comment" class="gc-input" rows="2" placeholder="e.g. 3 days off this week"></textarea>
+      </div>
     </div>
     <div class="gc-modal-footer">
       <button class="gc-btn gc-btn-secondary" style="color:var(--gc-gray-40)" onclick="closeModal('editRecordModal')">Cancel</button>
       <button class="gc-btn gc-btn-primary" id="erm_saveBtn" onclick="saveEditRecord()">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<div class="gc-modal-overlay" id="helpModal">
+  <div class="gc-modal" style="width:640px;">
+    <div class="gc-modal-header">
+      <span class="gc-modal-title">How the Workload Tracker works</span>
+      <button class="gc-modal-close" onclick="closeModal('helpModal')">×</button>
+    </div>
+    <div class="gc-modal-body">
+      <div class="help-step">
+        <div class="help-num">1</div>
+        <div><strong>Once a week, submit two columns of hours.</strong>
+          <span class="help-sub"><b>Actual</b> = the hours you really worked in the week just finished. <b>Forecast</b> = the hours you expect to work in the week ahead. Per project or deal — this replaces the old Excel file.</span></div>
+      </div>
+      <div class="help-step">
+        <div class="help-num">2</div>
+        <div><strong>The cycle rolls over every Friday at 15:00.</strong>
+          <span class="help-sub">From Friday afternoon the Submit tab switches to the new cycle: you log the week that is ending and forecast the next one. Soft deadline: <b>Monday 18:00</b>.</span></div>
+      </div>
+      <div class="help-step">
+        <div class="help-num">3</div>
+        <div><strong>Don't retype numbers — copy them.</strong>
+          <span class="help-sub">Your Actual is pre-filled from the forecast you made for that week. The <b>“Copy Actual → Forecast”</b> button between the columns does the same in the other direction, so you only adjust the differences.</span></div>
+      </div>
+      <div class="help-step">
+        <div class="help-num">4</div>
+        <div><strong>Made a mistake? Just resubmit.</strong>
+          <span class="help-sub">Submitting again overwrites your previous numbers. You can edit your own submissions <b><span id="helpEditWindow">for 14 days</span></b>; after that, ask a PL. Weeks closed by the Admin (🔒) are locked for everyone.</span></div>
+      </div>
+      <div class="help-step">
+        <div class="help-num">5</div>
+        <div><strong>Check yourself in History and Dashboard.</strong>
+          <span class="help-sub">History lists every week you've logged and its status. Dashboard shows your hours against the weekly target of <b><span id="helpTarget">40</span>h</b> and how accurate your forecasts turn out to be.</span></div>
+      </div>
+    </div>
+    <div class="gc-modal-footer">
+      <button class="gc-btn gc-btn-primary" onclick="closeModal('helpModal')">Got it</button>
     </div>
   </div>
 </div>
@@ -818,7 +919,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const DEFAULT_SETTINGS = { edit_window_days: 14, hours_per_week_target: 40 };
 const PROJECT_TYPES = ['Deal', 'Project'];
 
-let state = { users: [], projects: [], records: [], settings: { ...DEFAULT_SETTINGS }, currentUser: null, closedWeeks: new Set() };
+let state = { users: [], projects: [], records: [], settings: { ...DEFAULT_SETTINGS }, currentUser: null, closedWeeks: new Set(), comments: {} };
 let editingRecord = null;
 let editingProjectId = null;
 let dragSrcId = null;
@@ -837,19 +938,22 @@ async function loadAllFromSupabase() {
     return myProfile.status; // 'pending' | 'rejected'
   }
 
-  const [{ data: profiles }, { data: projects }, { data: records }, { data: settingsRow }, { data: closed }] = await Promise.all([
+  const [{ data: profiles }, { data: projects }, { data: records }, { data: settingsRow }, { data: closed }, { data: comments }] = await Promise.all([
     sb.from('profiles').select('*'),
     sb.from('projects').select('*').order('ord'),
     sb.from('records').select('*'),
     sb.from('settings').select('*').single(),
-    sb.from('closed_weeks').select('week_start')
+    sb.from('closed_weeks').select('week_start'),
+    sb.from('week_comments').select('*')
   ]);
 
   state.users    = profiles || [];
-  state.projects = (projects || []).map(p => ({ ...p, order: p.ord }));
+  state.projects = (projects || []).map(p => ({ ...p, order: p.ord, members: Array.isArray(p.members) ? p.members : [] }));
   state.records  = (records  || []).map(r => ({ ...r, entries: Array.isArray(r.entries) ? r.entries : [] }));
   state.settings = Object.assign({}, DEFAULT_SETTINGS, settingsRow || {});
   state.closedWeeks = new Set((closed || []).map(c => c.week_start));
+  state.comments = {};
+  (comments || []).forEach(c => { state.comments[c.user_id + '|' + c.week_start] = c.comment || ''; });
   state.currentUser = myProfile;
   return 'ok';
 }
@@ -1135,6 +1239,19 @@ function findRecord(user_id, week_start, type) {
   return state.records.find(r => r.user_id === user_id && r.week_start === week_start && r.type === type);
 }
 
+// Weekly note, shared per (user, week) — same box for that week's actual & forecast.
+function commentKey(user_id, week_start) { return user_id + '|' + week_start; }
+function commentFor(user_id, week_start) { return (state.comments && state.comments[commentKey(user_id, week_start)]) || ''; }
+function saveWeekComment(user_id, week_start, text) {
+  const clean = (text || '').trim();
+  const key = commentKey(user_id, week_start);
+  if ((state.comments[key] || '') === clean) return; // unchanged — skip the write
+  state.comments[key] = clean;
+  sb.from('week_comments')
+    .upsert({ user_id, week_start, comment: clean, updated_at: new Date().toISOString() })
+    .then(({ error }) => { if (error) { console.error('saveWeekComment:', error); alert('Could not save the note: ' + error.message); } });
+}
+
 function entriesForForm(user_id, week_start, type) {
   const rec = findRecord(user_id, week_start, type);
   const map = {};
@@ -1162,8 +1279,19 @@ function renderSubmit() {
   const actualWeek = ymd(lastMon);
   const forecastWeek = ymd(thisMon);
 
-  document.getElementById('actualWeekOf').textContent = 'Week of ' + fmtWeekRange(actualWeek);
-  document.getElementById('forecastWeekOf').textContent = 'Week of ' + fmtWeekRange(forecastWeek);
+  document.getElementById('actualWeekOf').textContent = 'Week just finished · ' + fmtWeekRange(actualWeek);
+  document.getElementById('forecastWeekOf').textContent = 'Week ahead · ' + fmtWeekRange(forecastWeek);
+
+  // First-visit welcome banner — dismissed once, remembered per browser.
+  const welcomeEl = document.getElementById('welcomeNotice');
+  if (welcomeEl) welcomeEl.innerHTML = localStorage.getItem('wl_welcome_dismissed') ? '' : `
+    <div class="notice notice-info" style="justify-content:space-between; flex-wrap:wrap;">
+      <span>👋 <strong>New here?</strong> This app replaces the Excel workload file: once a week you log the hours you worked (Actual) and the hours you expect (Forecast).</span>
+      <span style="display:flex; gap:8px; flex:0 0 auto;">
+        <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="openHelp()">How it works</button>
+        <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="dismissWelcome()">Got it ×</button>
+      </span>
+    </div>`;
 
   const actualRec = findRecord(u.id, actualWeek, 'actual');
   const forecastRec = findRecord(u.id, forecastWeek, 'forecast');
@@ -1212,7 +1340,12 @@ function renderSubmit() {
   const target = Number(state.settings.hours_per_week_target) || 40;
   const lastSub = state.records.filter(r => r.user_id === u.id).sort((a,b) => (b.submitted_at||'').localeCompare(a.submitted_at||''))[0];
   document.getElementById('submitStats').innerHTML = `
-    <div><div class="gc-cp-stat-label">Weekly target</div><div class="gc-cp-stat-value lime">${target}h</div></div>
+    <div><div class="gc-cp-stat-label">This cycle ${infoTip('What you have already submitted for the current cycle. Both columns should be in by Monday 18:00.')}</div>
+      <div style="display:flex; gap:6px; margin-top:6px;">
+        <span class="cycle-pill ${actualRec ? 'done' : 'miss'}">${actualRec ? '✓' : '✗'} Actual</span>
+        <span class="cycle-pill ${forecastRec ? 'done' : 'miss'}">${forecastRec ? '✓' : '✗'} Forecast</span>
+      </div></div>
+    <div><div class="gc-cp-stat-label">Weekly target ${infoTip('The team-wide reference set in Team & Setup. Totals more than 25% above it are highlighted in red.')}</div><div class="gc-cp-stat-value lime">${target}h</div></div>
     <div><div class="gc-cp-stat-label">Actual week</div><div class="gc-cp-stat-value wh" style="font-size:14px">${fmtWeekRange(actualWeek)}</div></div>
     <div><div class="gc-cp-stat-label">Forecast week</div><div class="gc-cp-stat-value wh" style="font-size:14px">${fmtWeekRange(forecastWeek)}</div></div>
     <div><div class="gc-cp-stat-label">Last submission</div><div class="gc-cp-stat-value wh" style="font-size:14px">${lastSub ? fmtDate(lastSub.submitted_at) : '—'}</div></div>
@@ -1234,6 +1367,12 @@ function renderSubmit() {
   } else {
     document.getElementById('submitBtn').textContent = (actualRec || forecastRec) ? 'Save changes' : 'Submit';
   }
+
+  // Weekly notes — one box per column, keyed to that column's week.
+  const aCom = document.getElementById('actualComment');
+  const fCom = document.getElementById('forecastComment');
+  if (aCom) { aCom.value = commentFor(u.id, actualWeek); aCom.disabled = actualLocked; }
+  if (fCom) { fCom.value = commentFor(u.id, forecastWeek); fCom.disabled = forecastLocked; }
 
   if (carryApplied) {
     document.querySelectorAll('#actualRows input').forEach(inp => {
@@ -1312,6 +1451,11 @@ function submitWorkload() {
 
   if (!aLocked) saveRecord(upsertRecord(u.id, lastMon, 'actual', actual, now));
   if (!fLocked) saveRecord(upsertRecord(u.id, thisMon, 'forecast', forecast, now));
+
+  const aCom = document.getElementById('actualComment');
+  const fCom = document.getElementById('forecastComment');
+  if (aCom && !aLocked) saveWeekComment(u.id, lastMon, aCom.value);
+  if (fCom && !fLocked) saveWeekComment(u.id, thisMon, fCom.value);
 
   renderSubmit();
   flashNotice('Workload submitted.');
@@ -1544,9 +1688,12 @@ function toggleHistoryDetail(week, user_id, btn) {
     const typeLbl = p ? projectTypeBadge(p.type) : '';
     return `<tr><td>${typeLbl} ${escapeHtml(p ? p.name : 'Deleted item')}</td><td class="r">${aMap[pid] != null ? aMap[pid].toFixed(1).replace(/\.0$/,'') + 'h' : '—'}</td><td class="r">${fMap[pid] != null ? fMap[pid].toFixed(1).replace(/\.0$/,'') + 'h' : '—'}</td></tr>`;
   }).join('');
-  const inner = projectIds.size === 0
+  const detailTable = projectIds.size === 0
     ? `<div style="padding:12px;color:var(--gc-gray-60);font-size:12px;">No project detail.</div>`
     : `<div class="detail-inner"><table class="detail-table"><thead><tr><th>Project / Deal</th><th class="r">Actual</th><th class="r">Forecast</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const cmt = commentFor(user_id, week);
+  const cmtHtml = cmt ? `<div style="padding:10px 14px;font-size:12px;color:var(--gc-gray-30);border-top:1px solid var(--gc-gray-95);">📝 <strong>Note:</strong> ${escapeHtml(cmt)}</div>` : '';
+  const inner = detailTable + cmtHtml;
   const newRow = document.createElement('tr');
   newRow.className = 'detail-row';
   newRow.innerHTML = `<td colspan="7">${inner}</td>`;
@@ -1580,6 +1727,8 @@ function openEditRecord(user_id, week_start) {
   if (aRec) metaParts.push('Actual submitted on: ' + fmtDateTime(aRec.submitted_at));
   if (fRec) metaParts.push('Forecast submitted on: ' + fmtDateTime(fRec.submitted_at));
   document.getElementById('erm_meta').textContent = metaParts.join(' · ') || "No submission for this week yet — you'll create it now.";
+  const cmt = document.getElementById('erm_comment');
+  if (cmt) { cmt.value = commentFor(user_id, week_start); cmt.disabled = aLocked && fLocked; }
   document.getElementById('erm_saveBtn').disabled = aLocked && fLocked;
   document.getElementById('erm_saveBtn').textContent = (aLocked && fLocked) ? 'Locked' : 'Save changes';
   openModal('editRecordModal');
@@ -1616,6 +1765,8 @@ function saveEditRecord() {
   if (aLocked && fLocked) { alert('This week is locked. An Admin must reopen it before it can be edited.'); return; }
   if (!aLocked) saveRecord(upsertRecord(user_id, week_actual, 'actual', aEntries, now));
   if (!fLocked) saveRecord(upsertRecord(user_id, week_actual, 'forecast', fEntries, now));
+  const cmt = document.getElementById('erm_comment');
+  if (cmt && !(aLocked && fLocked)) saveWeekComment(user_id, week_actual, cmt.value);
   closeModal('editRecordModal');
   renderActiveSection();
   flashNotice('Submission updated.');
@@ -1692,7 +1843,7 @@ function renderDashboard() {
   document.getElementById('dashStats').innerHTML = `
     <div><div class="gc-cp-stat-label">Total actual hours</div><div class="gc-cp-stat-value lime">${fmtHours(totalActual)}</div></div>
     <div><div class="gc-cp-stat-label">Total forecast hours</div><div class="gc-cp-stat-value wh">${fmtHours(totalForecast)}</div></div>
-    <div><div class="gc-cp-stat-label">Forecast accuracy</div><div class="gc-cp-stat-value ${accuracy==null?'wh':accuracy>=80?'lime':accuracy>=60?'amber':'red'}">${accuracy==null?'—':accuracy.toFixed(0)+'%'}</div></div>
+    <div><div class="gc-cp-stat-label">Forecast accuracy ${infoTip('How close forecasts are to reality: 100% − |actual − forecast| ÷ forecast, averaged over the weeks (and people) where both were submitted. 80%+ is good.')}</div><div class="gc-cp-stat-value ${accuracy==null?'wh':accuracy>=80?'lime':accuracy>=60?'amber':'red'}">${accuracy==null?'—':accuracy.toFixed(0)+'%'}</div></div>
     ${lastStat}
   `;
 
@@ -1726,8 +1877,8 @@ function renderDashboard() {
       <th>Name</th>
       <th class="r">Actual</th>
       <th class="r">Forecast</th>
-      <th class="r">Var %</th>
-      <th class="r">Share</th>
+      <th class="r">Var % ${infoTipN('How far actual came out from forecast: (actual − forecast) ÷ forecast. Positive = more hours than planned.')}</th>
+      <th class="r">Share ${infoTipN('This item’s slice of all actual hours in the selected range.')}</th>
     </tr></thead>
     <tbody>${rows || '<tr><td colspan="6" class="gc-empty">No data in the selected range.</td></tr>'}</tbody>
   `;
@@ -1848,6 +1999,31 @@ function renderPeopleMatrix() {
   renderPeopleLoadChart();
   renderPersonTrend();
   renderPeopleBreakdown();
+  renderMembership();
+}
+
+// ── Deals & projects each person is a member of (active items only) ──
+function renderMembership() {
+  const tbl = document.getElementById('membershipTable');
+  if (!tbl) return;
+  const users = [...state.users].filter(x => (x.status || 'approved') === 'approved').sort((a,b)=>a.name.localeCompare(b.name));
+  const active = state.projects.filter(p => p.status === 'active');
+  const rows = users.map(u => {
+    const mine = active.filter(p => Array.isArray(p.members) && p.members.includes(u.id));
+    const deals = mine.filter(p => (p.type || 'Project') === 'Deal');
+    const projs = mine.filter(p => (p.type || 'Project') !== 'Deal');
+    return { u, deals, projs };
+  }).sort((a,b) => (b.deals.length - a.deals.length) || (b.projs.length - a.projs.length) || a.u.name.localeCompare(b.u.name));
+
+  tbl.innerHTML = `
+    <thead><tr><th>Person</th><th class="r">Deals</th><th class="r">Projects</th><th>Member of</th></tr></thead>
+    <tbody>${rows.map(({ u, deals, projs }) => `<tr>
+      <td class="m">${escapeHtml(u.name)}</td>
+      <td class="r m">${deals.length}</td>
+      <td class="r">${projs.length}</td>
+      <td style="font-size:12px;color:var(--gc-gray-40)">${[...deals, ...projs].map(p => escapeHtml(p.name)).join(', ') || '<span style="color:var(--gc-gray-60)">—</span>'}</td>
+    </tr>`).join('') || '<tr><td colspan="4" class="gc-empty">No users.</td></tr>'}</tbody>
+  `;
 }
 
 // ── Submission check: who has submitted the current cycle ────
@@ -1893,19 +2069,30 @@ function renderSubmitStatus() {
     ? '<span class="gc-badge gc-badge-green">✓ Submitted</span>'
     : '<span class="gc-badge gc-badge-red">✗ Missing</span>';
 
+  const noteCell = (uid) => {
+    const parts = [];
+    const na = commentFor(uid, actualWeek);
+    const nf = commentFor(uid, forecastWeek);
+    if (na) parts.push(`<div><span style="color:var(--gc-gray-60)">${fmtWeekShort(actualWeek)}:</span> ${escapeHtml(na)}</div>`);
+    if (nf) parts.push(`<div><span style="color:var(--gc-gray-60)">${fmtWeekShort(forecastWeek)}:</span> ${escapeHtml(nf)}</div>`);
+    return parts.length ? `<div style="font-size:12px;color:var(--gc-gray-30);max-width:320px;">${parts.join('')}</div>` : '<span style="color:var(--gc-gray-60)">—</span>';
+  };
+
   tbl.innerHTML = `
     <thead><tr>
       <th>Person</th>
       <th>Actual (${fmtWeekShort(actualWeek)})</th>
       <th>Forecast (${fmtWeekShort(forecastWeek)})</th>
       <th>Status</th>
+      <th>Note</th>
     </tr></thead>
     <tbody>${rows.map(({ u, hasA, hasF, done }) => `<tr>
       <td class="m">${escapeHtml(u.name)}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
       <td>${check(hasA)}</td>
       <td>${check(hasF)}</td>
       <td>${done ? statusBadge('complete') : (hasA || hasF) ? statusBadge('partial') : statusBadge('missing')}</td>
-    </tr>`).join('') || '<tr><td colspan="4" class="gc-empty">No users.</td></tr>'}</tbody>
+      <td>${noteCell(u.id)}</td>
+    </tr>`).join('') || '<tr><td colspan="5" class="gc-empty">No users.</td></tr>'}</tbody>
   `;
 }
 
@@ -2154,7 +2341,7 @@ function renderPeopleBreakdown() {
     </tr>`;
   }).join('');
   document.getElementById('peopleBreakdownTable').innerHTML = `
-    <thead><tr><th>Type</th><th>Project / Deal</th><th class="r">Actual</th><th class="r">Forecast</th><th class="r">Share</th></tr></thead>
+    <thead><tr><th>Type</th><th>Project / Deal</th><th class="r">Actual</th><th class="r">Forecast</th><th class="r">Share ${infoTipN('This item’s slice of the person’s total actual hours in the selected period.')}</th></tr></thead>
     <tbody>${body || '<tr><td colspan="5" class="gc-empty">No hours logged in this period.</td></tr>'}</tbody>
   `;
 }
@@ -2248,12 +2435,12 @@ function renderVariance() {
     <thead><tr>
       ${typeHeader}
       <th>${groupBy==='person'?'Person':'Name'}</th>
-      <th class="c">Matched weeks</th>
+      <th class="c">Matched weeks ${infoTipN('Weeks where both the forecast and the actual were submitted — only these are compared.')}</th>
       <th class="r">Actual</th>
       <th class="r">Forecast</th>
-      <th class="r">Delta</th>
-      <th class="r">Var %</th>
-      <th class="r">Accuracy</th>
+      <th class="r">Delta ${infoTipN('Actual hours minus forecast hours. Positive = worked more than planned.')}</th>
+      <th class="r">Var % ${infoTipN('Delta as a percentage of the forecast. Green within ±10%, amber within ±25%, red beyond.')}</th>
+      <th class="r">Accuracy ${infoTipN('100% minus the absolute variance — how close the forecast was. Higher is better.')}</th>
     </tr></thead>
     <tbody>${rows || `<tr><td colspan="${colspan}" class="gc-empty">No matched (person, week) pairs in this range. The variance is only computed for weeks where both forecast and actual were submitted by the same person.</td></tr>`}</tbody>
   `;
@@ -2363,6 +2550,24 @@ function reorderProjects(srcId, targetId) {
   renderProjects();
   flashNotice('Order updated.');
 }
+function populateMemberPicker(selected) {
+  const box = document.getElementById('pm_members');
+  if (!box) return;
+  const sel = selected || [];
+  const set = new Set(sel);
+  const approvedIds = new Set(state.users.filter(x => (x.status || 'approved') === 'approved').map(u => u.id));
+  // Approved users, plus any already-assigned member who is no longer approved
+  // (or was deleted) so an unrelated edit never silently drops them.
+  const list = state.users
+    .filter(u => approvedIds.has(u.id) || set.has(u.id))
+    .map(u => ({ id: u.id, name: u.name, role: u.role, inactive: !approvedIds.has(u.id) }));
+  sel.filter(id => !state.users.some(u => u.id === id))
+    .forEach(id => list.push({ id, name: '(removed user)', role: '', inactive: true }));
+  list.sort((a,b) => a.name.localeCompare(b.name));
+  box.innerHTML = list.length
+    ? list.map(u => `<label><input type="checkbox" value="${u.id}" ${set.has(u.id)?'checked':''}> ${escapeHtml(u.name)} <span style="color:var(--gc-gray-60);font-size:11px;">${u.inactive ? 'inactive' : roleLabel(u.role)}</span></label>`).join('')
+    : '<div style="font-size:12px;color:var(--gc-gray-60);">No approved users yet.</div>';
+}
 function openProjectModal(id) {
   editingProjectId = id || null;
   if (id) {
@@ -2372,12 +2577,14 @@ function openProjectModal(id) {
     document.getElementById('pm_code').value = p.code || '';
     document.getElementById('pm_status').value = p.status;
     document.getElementById('pm_type').value = p.type || 'Project';
+    populateMemberPicker(p.members || []);
   } else {
     document.getElementById('projectModalTitle').textContent = 'Add item';
     document.getElementById('pm_name').value = '';
     document.getElementById('pm_code').value = '';
     document.getElementById('pm_status').value = 'active';
     document.getElementById('pm_type').value = 'Project';
+    populateMemberPicker([]);
   }
   openModal('projectModal');
 }
@@ -2386,13 +2593,14 @@ function saveProject() {
   const code = document.getElementById('pm_code').value.trim();
   const status = document.getElementById('pm_status').value;
   const type = document.getElementById('pm_type').value === 'Deal' ? 'Deal' : 'Project';
+  const members = [...document.querySelectorAll('#pm_members input:checked')].map(i => i.value);
   if (!name) { alert('Please enter a name.'); return; }
   if (editingProjectId) {
     const p = state.projects.find(x => x.id === editingProjectId);
-    p.name = name; p.code = code; p.status = status; p.type = type;
+    p.name = name; p.code = code; p.status = status; p.type = type; p.members = members;
     if (status === 'archived' && !p.archived_at) p.archived_at = new Date().toISOString();
   } else {
-    state.projects.push({ id: uid(), name, code, type, status, order: nextProjectOrder(), created_at: new Date().toISOString() });
+    state.projects.push({ id: uid(), name, code, type, status, members, order: nextProjectOrder(), created_at: new Date().toISOString() });
   }
   saveProjects();
   closeModal('projectModal');
@@ -2477,7 +2685,7 @@ function renderSettings() {
       </td>
       <td>${fmtDate(u.created_at)}</td>
       <td class="r"><div class="gc-row-actions">
-        ${isMe && u.role === 'PL' ? `<button class="gc-btn gc-btn-primary gc-btn-sm" title="Take the Admin role (the current Admin becomes PL)" onclick="selfPromoteToAdmin()">Become Admin</button>` : ''}
+        ${isMe && u.role === 'PL' ? `<button class="gc-btn gc-btn-primary gc-btn-sm" title="Take the Admin role (lets you close/reopen weeks)" onclick="selfPromoteToAdmin()">Become Admin</button>` : ''}
         <button class="gc-icon-btn" title="Reset password" onclick="resetUserPassword('${u.id}')">🔑</button>
         ${isMe ? '' : `<button class="gc-icon-btn danger" title="Delete user" onclick="deleteUser('${u.id}')">×</button>`}
       </div></td>
@@ -2565,11 +2773,9 @@ async function changeUserRole(id, role) {
   if (!u) return;
   const prev = u.role;
   if (role === prev) return;
-  const currentAdmin = state.users.find(x => x.role === 'Admin' && x.id !== id);
   let verb;
   if (role === 'Admin') {
-    verb = `Make ${u.name} the Admin?\n\nThe Admin can do everything a PL can, plus close and reopen weeks.`
-         + (currentAdmin ? `\n\nThere can be only one Admin, so ${currentAdmin.name} will be moved back to PL.` : '');
+    verb = `Make ${u.name} an Admin?\n\nAdmins can do everything a PL can, plus close and reopen weeks. There can be several Admins at once.`;
   } else if (role === 'PL') {
     verb = `Set ${u.name} as PL?\n\nPLs can manage projects, edit anyone's records, change settings, and add/remove users.`;
   } else {
@@ -2582,36 +2788,25 @@ async function changeUserRole(id, role) {
     renderSettings(); // revert the dropdown to the real value
     return;
   }
-  // Re-fetch profiles: a DB trigger may have auto-demoted the previous Admin.
-  const { data: profiles } = await sb.from('profiles').select('*');
-  if (profiles) state.users = profiles;
-  else u.role = role;
+  u.role = role;
   renderSettings();
   flashNotice(`${u.name} is now ${roleLabel(role)}.`);
 }
-// A PL can take the Admin role themselves; the DB trigger enforces the
-// single-Admin rule and moves the current Admin (if any) back to PL.
+// A PL can take the Admin role themselves. Multiple Admins may coexist, so
+// this does not affect anyone else.
 async function selfPromoteToAdmin() {
   const me = currentUser();
   if (!me || me.role !== 'PL') return;
-  const currentAdmin = state.users.find(x => x.role === 'Admin' && x.id !== me.id);
-  let msg = 'Take the Admin role?\n\nYou will be able to close and reopen weeks, on top of everything a PL can do.';
-  if (currentAdmin) msg += `\n\nThere can be only one Admin: ${currentAdmin.name} will be moved back to PL.`;
-  if (!confirm(msg)) return;
+  if (!confirm('Become an Admin?\n\nYou will be able to close and reopen weeks, on top of everything a PL can do.')) return;
   const { error } = await sb.from('profiles').update({ role: 'Admin' }).eq('id', me.id);
   if (error) { alert('Could not take the Admin role: ' + error.message); return; }
-  // Re-fetch profiles: the trigger auto-demoted the previous Admin (if any).
-  const { data: profiles } = await sb.from('profiles').select('*');
-  if (profiles) {
-    state.users = profiles;
-    const mine = profiles.find(x => x.id === me.id);
-    if (mine) state.currentUser = mine;
-  } else {
-    me.role = 'Admin';
-  }
-  document.getElementById('hdrUserRole').textContent = roleLabel(currentUser().role);
+  me.role = 'Admin';
+  const row = state.users.find(x => x.id === me.id);
+  if (row) row.role = 'Admin'; // state.currentUser and the state.users entry are different objects
+  state.currentUser = me;
+  document.getElementById('hdrUserRole').textContent = roleLabel(me.role);
   renderSettings();
-  flashNotice('You are now the Admin.');
+  flashNotice('You are now an Admin.');
 }
 async function resetUserPassword(id) {
   const u = state.users.find(x => x.id === id);
@@ -2627,6 +2822,12 @@ async function deleteUser(id) {
   const { error } = await sb.from('profiles').delete().eq('id', id);
   if (error) { alert('Could not remove user: ' + error.message); return; }
   state.users = state.users.filter(x => x.id !== id);
+  // Scrub the removed user from any project member lists (jsonb has no FK cascade).
+  const touched = state.projects.filter(p => Array.isArray(p.members) && p.members.includes(id));
+  if (touched.length) {
+    touched.forEach(p => { p.members = p.members.filter(m => m !== id); });
+    saveProjects();
+  }
   renderSettings();
   flashNotice('User removed.');
 }
@@ -2776,6 +2977,25 @@ function fmtHours(h) { if (h == null || h === '') return '—'; const v = Number
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+// ⓘ tooltip helpers. infoTip renders a custom bubble; infoTipN uses the native
+// title attribute — needed inside .gc-table-wrap, where overflow clips bubbles.
+function infoTip(text) { return `<span class="info-tip" data-tip="${escapeHtml(text)}">i</span>`; }
+function infoTipN(text) { return `<span class="info-tip" title="${escapeHtml(text)}">i</span>`; }
+
+function openHelp() {
+  const win = Number(state.settings.edit_window_days) || 0;
+  const w = document.getElementById('helpEditWindow');
+  if (w) w.textContent = win > 0 ? `for ${win} days` : 'at any time';
+  const t = document.getElementById('helpTarget');
+  if (t) t.textContent = Number(state.settings.hours_per_week_target) || 40;
+  openModal('helpModal');
+}
+function dismissWelcome() {
+  localStorage.setItem('wl_welcome_dismissed', '1');
+  const el = document.getElementById('welcomeNotice');
+  if (el) el.innerHTML = '';
+}
+
 // =========================================================
 // BOOT
 // =========================================================
@@ -2800,7 +3020,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } else if (event === 'SIGNED_OUT') {
       appStarted = false;
-      state = { users: [], projects: [], records: [], settings: { ...DEFAULT_SETTINGS }, currentUser: null, closedWeeks: new Set() };
+      state = { users: [], projects: [], records: [], settings: { ...DEFAULT_SETTINGS }, currentUser: null, closedWeeks: new Set(), comments: {} };
       showLogin();
     }
   });

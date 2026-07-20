@@ -425,3 +425,65 @@ create policy "update_records"
     and not (records.type = 'forecast'
              and exists (select 1 from public.closed_weeks cw where cw.week_start = records.week_start - 7))
   );
+
+-- =============================================================
+-- MIGRATION 5 — Multiple Admins, project members, weekly comments
+-- (idempotent — safe to run on the live database)
+-- =============================================================
+
+-- 1) Allow multiple Admins at once: the guard no longer auto-demotes the
+--    existing Admin when someone is promoted. It still blocks non-PLs from
+--    changing roles and refuses to remove the last remaining PL/Admin.
+create or replace function public.guard_profile_change()
+returns trigger language plpgsql security definer as $$
+begin
+  if auth.uid() is null then return new; end if;
+  if new.role is distinct from old.role then
+    if not public.is_pl() then
+      raise exception 'Only a PL can change a user role.';
+    end if;
+    if old.role in ('PL', 'Admin') and new.role = 'Analyst'
+       and (select count(*) from public.profiles where role in ('PL', 'Admin')) <= 1 then
+      raise exception 'Cannot remove the last remaining PL/Admin.';
+    end if;
+    -- (multiple Admins are allowed — no auto-demotion of the current Admin)
+  end if;
+  if new.status is distinct from old.status and not public.is_pl() then
+    raise exception 'Only a PL can approve or reject a user.';
+  end if;
+  return new;
+end;
+$$;
+
+-- 2) Team members (participants) on each project/deal.
+alter table public.projects
+  add column if not exists members jsonb not null default '[]'::jsonb;
+
+-- 3) One optional free-text note per (user, week). Shared by a week's
+--    actual and forecast, so a forecast note carries into the next cycle's
+--    actual for the same week.
+create table if not exists public.week_comments (
+  user_id    uuid references auth.users(id) on delete cascade not null,
+  week_start date not null,
+  comment    text not null default '',
+  updated_at timestamptz default now(),
+  primary key (user_id, week_start)
+);
+alter table public.week_comments enable row level security;
+
+drop policy if exists "read_week_comments" on public.week_comments;
+create policy "read_week_comments"
+  on public.week_comments for select to authenticated
+  using (public.is_approved());
+drop policy if exists "insert_week_comments" on public.week_comments;
+create policy "insert_week_comments"
+  on public.week_comments for insert to authenticated
+  with check (public.is_approved() and (user_id = auth.uid() or public.is_pl()));
+drop policy if exists "update_week_comments" on public.week_comments;
+create policy "update_week_comments"
+  on public.week_comments for update to authenticated
+  using (public.is_approved() and (user_id = auth.uid() or public.is_pl()));
+drop policy if exists "delete_week_comments" on public.week_comments;
+create policy "delete_week_comments"
+  on public.week_comments for delete to authenticated
+  using (user_id = auth.uid() or public.is_pl());
