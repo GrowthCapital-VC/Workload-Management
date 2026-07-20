@@ -258,6 +258,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
 
 .expand-toggle { background:none; border:none; cursor:pointer; color:var(--gc-blue); font-size:12px; font-weight:600; padding:4px; }
 .detail-row td { background:#fafcff; padding:0 !important; }
+.rv-detail td { background:#fafcff; font-size:12px; }
 .detail-row .detail-inner { padding:14px 20px; }
 .detail-table { width:100%; font-size:12px; }
 .detail-table th { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:0.8px; color:var(--gc-gray-40); padding:6px 8px; text-align:left; }
@@ -2088,10 +2089,37 @@ function renderPersonTrend() {
     { label: 'Forecast', data: weekTotals.map(w => w.forecast), borderColor:'#9EC31B', backgroundColor:'rgba(196,242,34,0.15)', tension:0.3, fill:false, borderDash:[4,4] }
   ];
   if (target > 0) datasets.push({ label: `Weekly target (${target}h)`, data: weeks.map(() => target), borderColor:'#E74C3C', borderWidth:2, borderDash:[6,4], pointRadius:0, pointHoverRadius:0, fill:false, tension:0 });
+
+  // Always-on value labels near each Actual/Forecast point (no hover needed).
+  const pointLabels = {
+    id: 'personTrendLabels',
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      ctx.save();
+      ctx.font = '700 10px Montserrat, sans-serif';
+      ctx.textAlign = 'center';
+      chart.data.datasets.forEach((ds, di) => {
+        if (/^Weekly target/.test(ds.label)) return; // skip the flat threshold line
+        const meta = chart.getDatasetMeta(di);
+        if (meta.hidden) return;
+        const below = ds.label === 'Forecast';
+        ctx.fillStyle = ds.borderColor;
+        ctx.textBaseline = below ? 'top' : 'bottom';
+        ds.data.forEach((v, i) => {
+          const pt = meta.data[i];
+          if (v == null || !pt) return;
+          ctx.fillText(fmtHours(v), pt.x, pt.y + (below ? 7 : -7));
+        });
+      });
+      ctx.restore();
+    }
+  };
+
   chartPersonTrendInstance = new Chart(ctx, {
     type: 'line',
     data: { labels: weekTotals.map(w => fmtWeekShort(w.week)), datasets },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ font:{ family:'Montserrat', size:11 } } } }, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Hours' } } } }
+    plugins: [pointLabels],
+    options: { responsive:true, maintainAspectRatio:false, layout:{ padding:{ top:18 } }, plugins:{ legend:{ position:'bottom', labels:{ font:{ family:'Montserrat', size:11 } } } }, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Hours' } } } }
   });
 }
 
@@ -2345,11 +2373,17 @@ function renderReview() {
   `;
 }
 
-// Expandable project split for one person: actual week + forecast week of the cycle.
+// Expandable project split for one person, rendered as real rows in the same
+// table so the Actual/Forecast columns line up with the person's totals above.
 function toggleReviewDetail(user_id, btn) {
   const tr = btn.closest('tr');
-  const next = tr.nextElementSibling;
-  if (next && next.classList.contains('detail-row')) { next.remove(); btn.textContent = '▾'; return; }
+  // Collapse: remove all the detail rows that follow this person's row.
+  if (tr.nextElementSibling && tr.nextElementSibling.classList.contains('rv-detail')) {
+    let n = tr.nextElementSibling;
+    while (n && n.classList.contains('rv-detail')) { const nx = n.nextElementSibling; n.remove(); n = nx; }
+    btn.textContent = '▾';
+    return;
+  }
   const { forecastWeek, actualWeek } = cycleWeeksOf('reviewCycle');
   const a = findRecord(user_id, actualWeek, 'actual');
   const f = findRecord(user_id, forecastWeek, 'forecast');
@@ -2359,20 +2393,29 @@ function toggleReviewDetail(user_id, btn) {
   const ids = new Set([...Object.keys(aMap), ...Object.keys(fMap)]);
   const orderedIds = sortedProjects([...ids].map(id => projMap[id]).filter(Boolean)).map(p => p.id);
   [...ids].forEach(id => { if (!orderedIds.includes(id)) orderedIds.push(id); });
-  const rows = orderedIds.map(pid => {
-    const p = projMap[pid];
-    return `<tr><td>${p ? projectTypeBadge(p.type) : ''} ${escapeHtml(p ? p.name : 'Deleted item')}</td><td class="r">${aMap[pid] != null ? fmtHours(aMap[pid]) : '—'}</td><td class="r">${fMap[pid] != null ? fmtHours(fMap[pid]) : '—'}</td></tr>`;
-  }).join('');
-  const detailTable = ids.size === 0
-    ? `<div style="padding:12px;color:var(--gc-gray-60);font-size:12px;">No project detail.</div>`
-    : `<div class="detail-inner"><table class="detail-table"><thead><tr><th>Project / Deal</th><th class="r">Actual (${fmtWeekShort(actualWeek)})</th><th class="r">Forecast (${fmtWeekShort(forecastWeek)})</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+
+  const rowsHtml = [];
+  if (ids.size === 0) {
+    rowsHtml.push(`<tr class="rv-detail"><td colspan="5" style="padding-left:34px;color:var(--gc-gray-60);font-size:12px;">No project detail.</td></tr>`);
+  } else {
+    orderedIds.forEach(pid => {
+      const p = projMap[pid];
+      rowsHtml.push(`<tr class="rv-detail">
+        <td class="m" style="padding-left:34px;font-weight:500;">${p ? projectTypeBadge(p.type) : ''} ${escapeHtml(p ? p.name : 'Deleted item')}</td>
+        <td class="r m">${aMap[pid] != null ? fmtHours(aMap[pid]) : '—'}</td>
+        <td class="r">${fMap[pid] != null ? fmtHours(fMap[pid]) : '—'}</td>
+        <td></td><td></td>
+      </tr>`);
+    });
+  }
   const na = commentFor(user_id, actualWeek), nf = commentFor(user_id, forecastWeek);
   const notes = [na && `📝 <strong>${fmtWeekShort(actualWeek)}:</strong> ${escapeHtml(na)}`, nf && `📝 <strong>${fmtWeekShort(forecastWeek)}:</strong> ${escapeHtml(nf)}`].filter(Boolean);
-  const inner = detailTable + (notes.length ? `<div style="padding:10px 14px;font-size:12px;color:var(--gc-gray-30);border-top:1px solid var(--gc-gray-95);">${notes.join('<br>')}</div>` : '');
-  const newRow = document.createElement('tr');
-  newRow.className = 'detail-row';
-  newRow.innerHTML = `<td colspan="5">${inner}</td>`;
-  tr.parentNode.insertBefore(newRow, tr.nextSibling);
+  if (notes.length) rowsHtml.push(`<tr class="rv-detail"><td colspan="5" style="padding:8px 14px 10px 34px;font-size:12px;color:var(--gc-gray-30);">${notes.join('<br>')}</td></tr>`);
+
+  const tmp = document.createElement('tbody');
+  tmp.innerHTML = rowsHtml.join('');
+  let anchor = tr;
+  [...tmp.children].forEach(node => { anchor.parentNode.insertBefore(node, anchor.nextSibling); anchor = node; });
   btn.textContent = '▴';
 }
 
