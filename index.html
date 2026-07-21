@@ -1598,9 +1598,10 @@ async function toggleWeekClosed(week) {
 
 function toggleHistoryDetail(week, user_id, btn) {
   const tr = btn.closest('tr');
-  const next = tr.nextElementSibling;
-  if (next && next.classList.contains('detail-row')) {
-    next.remove();
+  // Collapse: remove all the detail rows that follow this week's row.
+  if (tr.nextElementSibling && tr.nextElementSibling.classList.contains('rv-detail')) {
+    let n = tr.nextElementSibling;
+    while (n && n.classList.contains('rv-detail')) { const nx = n.nextElementSibling; n.remove(); n = nx; }
     btn.textContent = '▾';
     return;
   }
@@ -1616,21 +1617,31 @@ function toggleHistoryDetail(week, user_id, btn) {
   const orderedIds = sortedProjects([...projectIds].map(id => projMap[id]).filter(Boolean)).map(p => p.id);
   // Append any orphan ids (deleted projects) at the end
   [...projectIds].forEach(id => { if (!orderedIds.includes(id)) orderedIds.push(id); });
-  const rows = orderedIds.map(pid => {
-    const p = projMap[pid];
-    const typeLbl = p ? projectTypeBadge(p.type) : '';
-    return `<tr><td>${typeLbl} ${escapeHtml(p ? p.name : 'Deleted item')}</td><td class="r">${aMap[pid] != null ? aMap[pid].toFixed(1).replace(/\.0$/,'') + 'h' : '—'}</td><td class="r">${fMap[pid] != null ? fMap[pid].toFixed(1).replace(/\.0$/,'') + 'h' : '—'}</td></tr>`;
-  }).join('');
-  const detailTable = projectIds.size === 0
-    ? `<div style="padding:12px;color:var(--gc-gray-60);font-size:12px;">No project detail.</div>`
-    : `<div class="detail-inner"><table class="detail-table"><thead><tr><th>Project / Deal</th><th class="r">Actual</th><th class="r">Forecast</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+
+  // Real rows in the same 7-column table so Actual/Forecast line up with the columns above.
+  const rowsHtml = [];
+  if (projectIds.size === 0) {
+    rowsHtml.push(`<tr class="rv-detail"><td colspan="7" style="padding-left:34px;color:var(--gc-gray-60);font-size:12px;">No project detail.</td></tr>`);
+  } else {
+    orderedIds.forEach(pid => {
+      const p = projMap[pid];
+      rowsHtml.push(`<tr class="rv-detail">
+        <td class="m" style="padding-left:34px;font-weight:500;">${p ? projectTypeBadge(p.type) : ''} ${escapeHtml(p ? p.name : 'Deleted item')}</td>
+        <td></td>
+        <td class="r m">${aMap[pid] != null ? fmtHours(aMap[pid]) : '—'}</td>
+        <td></td>
+        <td class="r">${fMap[pid] != null ? fmtHours(fMap[pid]) : '—'}</td>
+        <td></td><td></td>
+      </tr>`);
+    });
+  }
   const cmt = commentFor(user_id, week);
-  const cmtHtml = cmt ? `<div style="padding:10px 14px;font-size:12px;color:var(--gc-gray-30);border-top:1px solid var(--gc-gray-95);">📝 <strong>Note:</strong> ${escapeHtml(cmt)}</div>` : '';
-  const inner = detailTable + cmtHtml;
-  const newRow = document.createElement('tr');
-  newRow.className = 'detail-row';
-  newRow.innerHTML = `<td colspan="7">${inner}</td>`;
-  tr.parentNode.insertBefore(newRow, tr.nextSibling);
+  if (cmt) rowsHtml.push(`<tr class="rv-detail"><td colspan="7" style="padding:8px 14px 10px 34px;font-size:12px;color:var(--gc-gray-30);">📝 <strong>Note:</strong> ${escapeHtml(cmt)}</td></tr>`);
+
+  const tmp = document.createElement('tbody');
+  tmp.innerHTML = rowsHtml.join('');
+  let anchor = tr;
+  [...tmp.children].forEach(node => { anchor.parentNode.insertBefore(node, anchor.nextSibling); anchor = node; });
   btn.textContent = '▴';
 }
 
