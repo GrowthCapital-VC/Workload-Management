@@ -2447,7 +2447,7 @@ function remindUser(id) {
     `Hi ${first},\n\nquick reminder to submit your workload on the Workload Tracker:\n` +
     `• Actual for the week of ${fmtWeekRange(actualWeek)}\n` +
     `• Forecast for the week of ${fmtWeekRange(forecastWeek)}\n\n` +
-    `Open it here: ${appUrl}\n\n` +
+    `Open it here: Workload App\n${appUrl}\n\n` +
     `The deadline is Monday 18:00 (Tuesday 10:00 at the latest, before the internal meeting).\n\nThanks!`);
   location.href = `mailto:${u.email}?subject=${subject}&body=${body}`;
 }
@@ -2465,7 +2465,7 @@ function emailAllMissing() {
     `Hi,\n\nthis is a reminder to submit your workload on the Workload Tracker:\n` +
     `• Actual for the week of ${fmtWeekRange(actualWeek)}\n` +
     `• Forecast for the week of ${fmtWeekRange(forecastWeek)}\n\n` +
-    `Open it here: ${appUrl}\n\n` +
+    `Open it here: Workload App\n${appUrl}\n\n` +
     `Deadline: Monday 18:00 (Tuesday 10:00 at the latest, before the internal meeting).\n\nThanks!`);
   const to = encodeURIComponent(me && me.email ? me.email : '');
   location.href = `mailto:${to}?bcc=${encodeURIComponent(missing.join(';'))}&subject=${subject}&body=${body}`;
