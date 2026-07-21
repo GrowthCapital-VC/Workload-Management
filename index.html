@@ -2441,11 +2441,13 @@ function remindUser(id) {
   if (!u) return;
   const { forecastWeek, actualWeek } = cycleWeeksOf('ssCycle');
   const first = (u.name || '').split(' ')[0];
+  const appUrl = location.origin + location.pathname;
   const subject = encodeURIComponent('Reminder: workload submission');
   const body = encodeURIComponent(
     `Hi ${first},\n\nquick reminder to submit your workload on the Workload Tracker:\n` +
     `• Actual for the week of ${fmtWeekRange(actualWeek)}\n` +
     `• Forecast for the week of ${fmtWeekRange(forecastWeek)}\n\n` +
+    `Open it here: ${appUrl}\n\n` +
     `The deadline is Monday 18:00 (Tuesday 10:00 at the latest, before the internal meeting).\n\nThanks!`);
   location.href = `mailto:${u.email}?subject=${subject}&body=${body}`;
 }
@@ -2457,11 +2459,13 @@ function emailAllMissing() {
   const { forecastWeek, actualWeek } = cycleWeeksOf('ssCycle');
   const missing = checklistRowsFor(actualWeek, forecastWeek).filter(r => !r.done).map(r => r.u.email);
   if (!missing.length) { flashNotice('Everyone has submitted — no reminders to send.'); return; }
+  const appUrl = location.origin + location.pathname;
   const subject = encodeURIComponent('Reminder: workload submission');
   const body = encodeURIComponent(
     `Hi,\n\nthis is a reminder to submit your workload on the Workload Tracker:\n` +
     `• Actual for the week of ${fmtWeekRange(actualWeek)}\n` +
     `• Forecast for the week of ${fmtWeekRange(forecastWeek)}\n\n` +
+    `Open it here: ${appUrl}\n\n` +
     `Deadline: Monday 18:00 (Tuesday 10:00 at the latest, before the internal meeting).\n\nThanks!`);
   const to = encodeURIComponent(me && me.email ? me.email : '');
   location.href = `mailto:${to}?bcc=${encodeURIComponent(missing.join(';'))}&subject=${subject}&body=${body}`;
