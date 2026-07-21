@@ -604,7 +604,10 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
             <span class="gc-card-title">Submission check</span>
             <div class="gc-card-sub" id="ssChecklistSub">—</div>
           </div>
-          <button class="gc-btn gc-btn-ghost gc-btn-sm" id="ssCopyMissing" onclick="copyMissingEmails()">⧉ Copy emails of missing</button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="gc-btn gc-btn-primary gc-btn-sm" id="ssEmailMissing" onclick="emailAllMissing()" title="Open one reminder email to all latecomers, with each recipient in BCC so they don't see the others">✉ Email all latecomers</button>
+            <button class="gc-btn gc-btn-ghost gc-btn-sm" id="ssCopyMissing" onclick="copyMissingEmails()">⧉ Copy emails of missing</button>
+          </div>
         </div>
         <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="ssChecklistTable"></table></div>
       </div>
@@ -2289,6 +2292,8 @@ function renderSubmissionStatus() {
   const missing = rows.filter(r => !r.done);
   const copyBtn = document.getElementById('ssCopyMissing');
   if (copyBtn) { copyBtn.style.display = missing.length ? '' : 'none'; copyBtn.textContent = `⧉ Copy emails of missing (${missing.length})`; }
+  const emailBtn = document.getElementById('ssEmailMissing');
+  if (emailBtn) { emailBtn.style.display = missing.length ? '' : 'none'; emailBtn.textContent = `✉ Email all latecomers (${missing.length})`; }
   const check = ok => ok
     ? '<span class="gc-badge gc-badge-green">✓ Submitted</span>'
     : '<span class="gc-badge gc-badge-red">✗ Missing</span>';
@@ -2432,6 +2437,23 @@ function remindUser(id) {
     `• Forecast for the week of ${fmtWeekRange(forecastWeek)}\n\n` +
     `The deadline is Monday 18:00 (Tuesday 10:00 at the latest, before the internal meeting).\n\nThanks!`);
   location.href = `mailto:${u.email}?subject=${subject}&body=${body}`;
+}
+// One reminder email to every latecomer at once, each in BCC so recipients
+// don't see one another. "To" is the sending Admin (a valid recipient many
+// mail clients require), everyone missing goes in BCC.
+function emailAllMissing() {
+  const me = currentUser();
+  const { forecastWeek, actualWeek } = cycleWeeksOf('ssCycle');
+  const missing = checklistRowsFor(actualWeek, forecastWeek).filter(r => !r.done).map(r => r.u.email);
+  if (!missing.length) { flashNotice('Everyone has submitted — no reminders to send.'); return; }
+  const subject = encodeURIComponent('Reminder: workload submission');
+  const body = encodeURIComponent(
+    `Hi,\n\nthis is a reminder to submit your workload on the Workload Tracker:\n` +
+    `• Actual for the week of ${fmtWeekRange(actualWeek)}\n` +
+    `• Forecast for the week of ${fmtWeekRange(forecastWeek)}\n\n` +
+    `Deadline: Monday 18:00 (Tuesday 10:00 at the latest, before the internal meeting).\n\nThanks!`);
+  const to = encodeURIComponent(me && me.email ? me.email : '');
+  location.href = `mailto:${to}?bcc=${encodeURIComponent(missing.join(';'))}&subject=${subject}&body=${body}`;
 }
 function copyMissingEmails() {
   const { forecastWeek, actualWeek } = cycleWeeksOf('ssCycle');
