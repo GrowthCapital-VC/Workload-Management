@@ -487,3 +487,67 @@ drop policy if exists "delete_week_comments" on public.week_comments;
 create policy "delete_week_comments"
   on public.week_comments for delete to authenticated
   using (user_id = auth.uid() or public.is_pl());
+
+-- =============================================================
+-- MIGRATION 6 — Job position (seniority), separate from the access role
+-- (idempotent — safe to run on the live database)
+--
+-- Positions: Partner, VP, Senior Associate, Associate, Senior Analyst,
+-- Analyst. Chosen at sign-up; afterwards only a PL/Admin can change it.
+-- =============================================================
+alter table public.profiles
+  add column if not exists position text
+    check (position is null or position in
+      ('Partner', 'VP', 'Senior Associate', 'Associate', 'Senior Analyst', 'Analyst'));
+
+-- Sign-up trigger also stores the chosen position (validated; invalid → null).
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer as $$
+declare
+  is_first boolean;
+  pos text;
+begin
+  if lower(split_part(new.email, '@', 2)) <> 'growthcapital.vc' then
+    raise exception 'Registration is restricted to @growthcapital.vc email addresses.';
+  end if;
+  select not exists (select 1 from public.profiles limit 1) into is_first;
+  pos := new.raw_user_meta_data->>'position';
+  if pos is not null and pos not in ('Partner', 'VP', 'Senior Associate', 'Associate', 'Senior Analyst', 'Analyst') then
+    pos := null;
+  end if;
+  insert into public.profiles (id, email, name, role, status, position)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    case when is_first then 'Admin' else 'Analyst' end,
+    case when is_first then 'approved' else 'pending' end,
+    pos
+  );
+  return new;
+end;
+$$;
+
+-- Guard: only a PL/Admin may change a job position (plus the earlier rules).
+create or replace function public.guard_profile_change()
+returns trigger language plpgsql security definer as $$
+begin
+  if auth.uid() is null then return new; end if;
+  if new.role is distinct from old.role then
+    if not public.is_pl() then
+      raise exception 'Only a PL can change a user role.';
+    end if;
+    if old.role in ('PL', 'Admin') and new.role = 'Analyst'
+       and (select count(*) from public.profiles where role in ('PL', 'Admin')) <= 1 then
+      raise exception 'Cannot remove the last remaining PL/Admin.';
+    end if;
+  end if;
+  if new.status is distinct from old.status and not public.is_pl() then
+    raise exception 'Only a PL can approve or reject a user.';
+  end if;
+  if new.position is distinct from old.position and not public.is_pl() then
+    raise exception 'Only a PL can change a job position.';
+  end if;
+  return new;
+end;
+$$;

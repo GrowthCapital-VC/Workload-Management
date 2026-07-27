@@ -165,6 +165,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
 .gc-badge-red { background:#FBD5D0; color:#9C2616; }
 .gc-badge-gray { background:var(--gc-gray-90); color:var(--gc-gray-20); }
 .gc-badge-lime { background:#EDFBBD; color:#3E4C0A; }
+.gc-badge-violet { background:#E9E1FB; color:#4B2E83; }
 
 .gc-chart-container { position:relative; height:320px; padding:10px; }
 
@@ -325,6 +326,18 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         <div class="gc-form-group">
           <label>Company email</label>
           <input type="email" class="gc-input" id="signupEmail" required placeholder="name@growthcapital.vc">
+        </div>
+        <div class="gc-form-group">
+          <label>Job position</label>
+          <select class="gc-select" id="signupPosition" required>
+            <option value="" disabled selected>Select your position…</option>
+            <option>Partner</option>
+            <option>VP</option>
+            <option>Senior Associate</option>
+            <option>Associate</option>
+            <option>Senior Analyst</option>
+            <option>Analyst</option>
+          </select>
         </div>
         <div class="gc-form-group">
           <label>Password (min 6 characters)</label>
@@ -1098,11 +1111,14 @@ async function doSignup() {
   const name  = document.getElementById('signupName').value.trim();
   const email = document.getElementById('signupEmail').value.trim().toLowerCase();
   const pw    = document.getElementById('signupPassword').value;
+  const position = document.getElementById('signupPosition').value;
   if (!name || !email || pw.length < 6)
     return showAuthError('signupError', 'Please fill all fields (password at least 6 characters).');
+  if (!POSITIONS.includes(position))
+    return showAuthError('signupError', 'Please select your job position.');
   if (!/@growthcapital\.vc$/.test(email))
     return showAuthError('signupError', 'This email address can’t be used to register.');
-  const { error } = await sb.auth.signUp({ email, password: pw, options: { data: { name } } });
+  const { error } = await sb.auth.signUp({ email, password: pw, options: { data: { name, position } } });
   if (error) return showAuthError('signupError', error.message);
   // If a session is created (email confirmation off), onAuthStateChange routes
   // the user to the pending screen. Otherwise show the login info message.
@@ -1122,6 +1138,9 @@ function isPL(u) { u = u || currentUser(); return !!u && (u.role === 'PL' || u.r
 function isAdmin(u) { u = u || currentUser(); return !!u && u.role === 'Admin'; }
 function roleBadgeClass(role) { return role === 'Admin' ? 'gc-badge-green' : role === 'PL' ? 'gc-badge-blue' : 'gc-badge-gray'; }
 function roleLabel(role) { return role === 'Analyst' ? 'GC User' : role; }
+// Job position (seniority), separate from the access role.
+const POSITIONS = ['Partner', 'VP', 'Senior Associate', 'Associate', 'Senior Analyst', 'Analyst'];
+function positionBadge(pos) { return pos ? `<span class="gc-badge gc-badge-violet" title="Position">${escapeHtml(pos)}</span>` : ''; }
 // Week-lock helpers — a closed week cannot be edited by anyone until reopened.
 function isWeekClosed(week) { return state.closedWeeks instanceof Set && state.closedWeeks.has(week); }
 
@@ -1905,7 +1924,7 @@ function renderPeopleMatrix() {
       return `<td class="c"><span class="gc-badge ${cls}" title="${title}">${txt}</span></td>`;
     }).join('');
     return `<tr>
-      <td class="m">${escapeHtml(u.name)}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
+      <td class="m">${escapeHtml(u.name)} ${positionBadge(u.position)}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
       <td><span class="gc-badge ${roleBadgeClass(u.role)}">${roleLabel(u.role)}</span></td>
       ${cells}
       <td class="r m">${fmtHours(totA)}</td>
@@ -2155,7 +2174,7 @@ function breakdownData() {
   add('actual'); add('forecast');
   const rows = Object.entries(map).map(([pid, v]) => {
     const p = state.projects.find(x => x.id === pid);
-    return { name: p ? p.name : '(deleted)', code: p ? (p.code || '') : '', type: p ? (p.type || 'Project') : 'Project',
+    return { id: pid, name: p ? p.name : '(deleted)', code: p ? (p.code || '') : '', type: p ? (p.type || 'Project') : 'Project',
              order: p ? (p.order || 0) : 9999, actual: v.actual, forecast: v.forecast };
   }).filter(r => r.actual > 0 || r.forecast > 0)
     .sort((a, b) => (a.order - b.order) || a.name.localeCompare(b.name));
@@ -2187,16 +2206,17 @@ function renderBreakdown() {
       userSel.value = cur || '__all';
     }
   }
-  const { rows, totalA } = breakdownData();
+  const { rows, totalA, userId } = breakdownData();
   const rv = rangeSel.value;
   const sub = document.getElementById('breakdownSub');
   if (sub) sub.textContent = 'Hours split across projects and deals · ' + (rv === 'all' ? 'all time' : periodLabel(periodWeeks(rv)));
+  const expandable = userId === '__all'; // people-per-project only makes sense for the whole team
   const body = rows.map(r => {
     const variance = r.forecast > 0 ? ((r.actual - r.forecast) / r.forecast) * 100 : null;
     const share = totalA > 0 ? (r.actual / totalA * 100) : 0;
     return `<tr>
       <td>${projectTypeBadge(r.type)}</td>
-      <td class="m">${escapeHtml(r.name)}${r.code ? ` <span class="proj-code">${escapeHtml(r.code)}</span>` : ''}</td>
+      <td class="m">${expandable ? `<button class="gc-icon-btn" title="Who worked on it" onclick="toggleProjectPeople('${r.id}', 'breakdown', this)">▾</button> ` : ''}${escapeHtml(r.name)}${r.code ? ` <span class="proj-code">${escapeHtml(r.code)}</span>` : ''}</td>
       <td class="r m">${fmtHours(r.actual)}</td>
       <td class="r">${fmtHours(r.forecast)}</td>
       <td class="r">${variance == null ? '—' : (variance >= 0 ? '+' : '') + variance.toFixed(0) + '%'}</td>
@@ -2326,7 +2346,7 @@ function renderSubmissionStatus() {
       <th class="r">Follow-up</th>
     </tr></thead>
     <tbody>${rows.map(({ u, a, f, done }) => `<tr>
-      <td class="m">${escapeHtml(u.name)}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
+      <td class="m">${escapeHtml(u.name)} ${positionBadge(u.position)}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
       <td>${check(!!a)}</td>
       <td>${check(!!f)}</td>
       <td>${done ? statusBadge('complete') : (a || f) ? statusBadge('partial') : statusBadge('missing')}</td>
@@ -2353,7 +2373,7 @@ function renderReview() {
     const m = membershipOf(u.id);
     const names = [...m.deals, ...m.projects].map(p => p.name).join(', ') || 'none';
     return `<tr>
-      <td class="m">${escapeHtml(u.name)}</td>
+      <td class="m">${escapeHtml(u.name)} ${positionBadge(u.position)}</td>
       <td class="r m">${aH == null ? '—' : fmtHours(aH)}</td>
       <td class="r">${fH == null ? '—' : fmtHours(fH)}</td>
       <td class="c" title="${escapeHtml(names)}"><span class="gc-badge gc-badge-blue">${m.deals.length} deal${m.deals.length === 1 ? '' : 's'}</span> <span class="gc-badge gc-badge-lime">${m.projects.length} proj</span></td>
@@ -2372,7 +2392,7 @@ function renderReview() {
   rows.forEach(({ a, f }) => { addTo(a, 'actual'); addTo(f, 'forecast'); });
   const projRows = Object.entries(agg).map(([pid, v]) => {
     const p = state.projects.find(x => x.id === pid);
-    return { name: p ? p.name : '(deleted)', code: p ? (p.code || '') : '', type: p ? (p.type || 'Project') : 'Project', order: p ? (p.order || 0) : 9999, ...v };
+    return { id: pid, name: p ? p.name : '(deleted)', code: p ? (p.code || '') : '', type: p ? (p.type || 'Project') : 'Project', order: p ? (p.order || 0) : 9999, ...v };
   }).filter(x => x.actual > 0 || x.forecast > 0)
     .sort((x, y) => (x.order - y.order) || x.name.localeCompare(y.name));
   const pTotA = projRows.reduce((s, x) => s + x.actual, 0);
@@ -2381,12 +2401,67 @@ function renderReview() {
     <thead><tr><th>Type</th><th>Project / Deal</th><th class="r">Actual (${fmtWeekShort(actualWeek)})</th><th class="r">Forecast (${fmtWeekShort(forecastWeek)})</th></tr></thead>
     <tbody>${projRows.map(x => `<tr>
       <td>${projectTypeBadge(x.type)}</td>
-      <td class="m">${escapeHtml(x.name)}${x.code ? ` <span class="proj-code">${escapeHtml(x.code)}</span>` : ''}</td>
+      <td class="m"><button class="gc-icon-btn" title="Who worked on it" onclick="toggleProjectPeople('${x.id}', 'review', this)">▾</button> ${escapeHtml(x.name)}${x.code ? ` <span class="proj-code">${escapeHtml(x.code)}</span>` : ''}</td>
       <td class="r m">${fmtHours(x.actual)}</td>
       <td class="r">${fmtHours(x.forecast)}</td>
     </tr>`).join('') || '<tr><td colspan="4" class="gc-empty">No hours logged in this cycle yet.</td></tr>'}
     ${projRows.length ? `<tr class="total-row"><td></td><td>Total</td><td class="r">${fmtHours(pTotA)}</td><td class="r">${fmtHours(pTotF)}</td></tr>` : ''}</tbody>
   `;
+}
+
+// Expand a project row to show who logged hours on it, with their position.
+// mode 'review' → cycle (actual week + forecast week); 'breakdown' → the
+// Dashboard breakdown's current period. Rows align to the parent table.
+function toggleProjectPeople(pid, mode, btn) {
+  const tr = btn.closest('tr');
+  if (tr.nextElementSibling && tr.nextElementSibling.classList.contains('rv-detail')) {
+    let n = tr.nextElementSibling;
+    while (n && n.classList.contains('rv-detail')) { const nx = n.nextElementSibling; n.remove(); n = nx; }
+    btn.textContent = '▾';
+    return;
+  }
+  // Gather actual/forecast hours per user on this project.
+  const per = {};
+  if (mode === 'review') {
+    const { forecastWeek, actualWeek } = cycleWeeksOf('reviewCycle');
+    state.records.forEach(r => {
+      const inA = r.type === 'actual' && r.week_start === actualWeek;
+      const inF = r.type === 'forecast' && r.week_start === forecastWeek;
+      if (!inA && !inF) return;
+      const e = r.entries.find(x => x.project_id === pid); if (!e) return;
+      (per[r.user_id] = per[r.user_id] || { a: 0, f: 0 })[inA ? 'a' : 'f'] += Number(e.hours) || 0;
+    });
+  } else {
+    const rangeSel = document.getElementById('breakdownRange');
+    const rv = rangeSel ? rangeSel.value : 'r:13';
+    const weekSet = (rv === 'all') ? null : new Set(periodWeeks(rv));
+    state.records.forEach(r => {
+      if (weekSet && !weekSet.has(r.week_start)) return;
+      const e = r.entries.find(x => x.project_id === pid); if (!e) return;
+      (per[r.user_id] = per[r.user_id] || { a: 0, f: 0 })[r.type === 'actual' ? 'a' : 'f'] += Number(e.hours) || 0;
+    });
+  }
+  // Review mode counts only approved users (to match the by-project totals,
+  // built from approved users); breakdown mode counts everyone, like its parent.
+  const approvedOnly = mode === 'review';
+  const people = Object.entries(per).map(([uid, v]) => ({ u: state.users.find(x => x.id === uid), a: v.a, f: v.f }))
+    .filter(x => x.u && (x.a > 0 || x.f > 0) && (!approvedOnly || (x.u.status || 'approved') === 'approved'))
+    .sort((x, y) => (y.a + y.f) - (x.a + x.f) || x.u.name.localeCompare(y.u.name));
+  const pad = mode === 'review' ? 2 : 4; // trailing empty cells to match parent table width
+  const rowsHtml = people.length
+    ? people.map(({ u, a, f }) => `<tr class="rv-detail">
+        <td></td>
+        <td class="m" style="padding-left:30px;">${escapeHtml(u.name)} ${positionBadge(u.position)}</td>
+        <td class="r m">${a ? fmtHours(a) : '—'}</td>
+        <td class="r">${f ? fmtHours(f) : '—'}</td>
+        ${'<td></td>'.repeat(pad - 2)}
+      </tr>`).join('')
+    : `<tr class="rv-detail"><td></td><td colspan="${pad + 1}" style="padding-left:30px;color:var(--gc-gray-60);font-size:12px;">No one logged hours here.</td></tr>`;
+  const tmp = document.createElement('tbody');
+  tmp.innerHTML = rowsHtml;
+  let anchor = tr;
+  [...tmp.children].forEach(node => { anchor.parentNode.insertBefore(node, anchor.nextSibling); anchor = node; });
+  btn.textContent = '▴';
 }
 
 // Expandable project split for one person, rendered as real rows in the same
@@ -2447,7 +2522,7 @@ function remindUser(id) {
     `Hi ${first},\n\nquick reminder to submit your workload on the Workload Tracker:\n` +
     `• Actual for the week of ${fmtWeekRange(actualWeek)}\n` +
     `• Forecast for the week of ${fmtWeekRange(forecastWeek)}\n\n` +
-    `Open it here: Workload App\n${appUrl}\n\n` +
+    `Open it here: Workload App\n${appUrl} \n\n` +
     `The deadline is Monday 18:00 (Tuesday 10:00 at the latest, before the internal meeting).\n\nThanks!`);
   location.href = `mailto:${u.email}?subject=${subject}&body=${body}`;
 }
@@ -2465,7 +2540,7 @@ function emailAllMissing() {
     `Hi,\n\nthis is a reminder to submit your workload on the Workload Tracker:\n` +
     `• Actual for the week of ${fmtWeekRange(actualWeek)}\n` +
     `• Forecast for the week of ${fmtWeekRange(forecastWeek)}\n\n` +
-    `Open it here: Workload App\n${appUrl}\n\n` +
+    `Open it here: Workload App\n${appUrl} \n\n` +
     `Deadline: Monday 18:00 (Tuesday 10:00 at the latest, before the internal meeting).\n\nThanks!`);
   const to = encodeURIComponent(me && me.email ? me.email : '');
   location.href = `mailto:${to}?bcc=${encodeURIComponent(missing.join(';'))}&subject=${subject}&body=${body}`;
@@ -2708,6 +2783,7 @@ function renderSettings() {
 
   const rows = approved.map(u => {
     const isMe = u.id === me.id;
+    const posOpts = ['<option value="">—</option>'].concat(POSITIONS.map(p => `<option value="${p}" ${u.position === p ? 'selected' : ''}>${p}</option>`)).join('');
     return `<tr>
       <td class="m">${escapeHtml(u.name)} ${isMe?'<span style="font-size:11px;color:var(--gc-gray-60);">(you)</span>':''}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
       <td>
@@ -2716,6 +2792,9 @@ function renderSettings() {
           <option value="PL" ${u.role==='PL'?'selected':''}>PL</option>
           <option value="Admin" ${u.role==='Admin'?'selected':''}>Admin</option>
         </select>
+      </td>
+      <td>
+        <select class="gc-select small" style="font-size:12px;padding:4px 8px;" onchange="changeUserPosition('${u.id}', this.value)">${posOpts}</select>
       </td>
       <td>${fmtDate(u.created_at)}</td>
       <td class="r"><div class="gc-row-actions">
@@ -2726,7 +2805,7 @@ function renderSettings() {
     </tr>`;
   }).join('');
   document.getElementById('usersTable').innerHTML = `
-    <thead><tr><th>User</th><th>Role</th><th>Created</th><th class="r">Actions</th></tr></thead>
+    <thead><tr><th>User</th><th>Role</th><th>Position</th><th>Created</th><th class="r">Actions</th></tr></thead>
     <tbody>${rows}</tbody>
   `;
 
@@ -2747,7 +2826,7 @@ function renderSettings() {
         : `<button class="gc-btn gc-btn-primary gc-btn-sm" onclick="approveUser('${u.id}')">Approve</button>
            <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="rejectUser('${u.id}')">Reject</button>${del}`;
       return `<tr>
-        <td class="m">${escapeHtml(u.name)}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
+        <td class="m">${escapeHtml(u.name)} ${positionBadge(u.position)}<div style="font-size:11px;color:var(--gc-gray-60)">${escapeHtml(u.email)}</div></td>
         <td>${badge}</td>
         <td>${fmtDate(u.created_at)}</td>
         <td class="r"><div class="gc-row-actions">${actions}</div></td>
@@ -2801,6 +2880,16 @@ function saveSettings() {
   state.settings.hours_per_week_target = Math.max(0, parseInt(document.getElementById('settingsHoursTarget').value, 10) || 0);
   saveSettingsState();
   flashNotice('Settings saved.');
+}
+async function changeUserPosition(id, position) {
+  const u = state.users.find(x => x.id === id);
+  if (!u) return;
+  const val = position || null;
+  if ((u.position || null) === val) return;
+  const { error } = await sb.from('profiles').update({ position: val }).eq('id', id);
+  if (error) { alert('Could not update position: ' + error.message); renderSettings(); return; }
+  u.position = val;
+  flashNotice(`${u.name}: position set to ${val || '—'}.`);
 }
 async function changeUserRole(id, role) {
   const u = state.users.find(x => x.id === id);
