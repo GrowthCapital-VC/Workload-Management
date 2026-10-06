@@ -237,6 +237,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
 .cycle-pill { display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:999px; font-size:11px; font-weight:700; letter-spacing:.3px; }
 .cycle-pill.done { background:rgba(196,242,34,0.18); color:var(--gc-lime); border:1px solid rgba(196,242,34,0.4); }
 .cycle-pill.miss { background:rgba(255,138,128,0.15); color:#FF8A80; border:1px solid rgba(255,138,128,0.4); }
+.cycle-pill.na { background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.7); border:1px solid rgba(255,255,255,0.25); }
 
 /* ⓘ info tooltip — icon only; the bubble is a single fixed-position element
    moved by JS (showTipBubble) so it never gets clipped by scroll containers */
@@ -260,6 +261,14 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
 .expand-toggle { background:none; border:none; cursor:pointer; color:var(--gc-blue); font-size:12px; font-weight:600; padding:4px; }
 .detail-row td { background:#fafcff; padding:0 !important; }
 .rv-detail td { background:#fafcff; font-size:12px; }
+.pos-table-title { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:13px; margin:4px 0 10px; }
+.pos-table-title span { font-family:inherit; font-weight:400; font-size:12px; color:var(--gc-gray-60); }
+.gc-table tbody tr.pos-group td { background:var(--gc-offwhite); font-weight:600; border-top:2px solid var(--gc-gray-90); }
+.gc-table tbody tr.pos-member td:first-child { padding-left:44px; }
+.pos-delta { font-size:12px; font-weight:600; }
+.pos-delta.up { color:#C0570A; }
+.pos-delta.down { color:var(--gc-blue); }
+.pos-delta.even { color:var(--gc-gray-60); font-weight:500; }
 .detail-row .detail-inner { padding:14px 20px; }
 .detail-table { width:100%; font-size:12px; }
 .detail-table th { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:0.8px; color:var(--gc-gray-40); padding:6px 8px; text-align:left; }
@@ -566,6 +575,10 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
             </div>
           </div>
           <div class="gc-card-body"><div class="gc-chart-container" style="height:420px;"><canvas id="chartPersonLoad"></canvas></div></div>
+          <div class="gc-card-body gc-table-wrap" style="padding-top:0;">
+            <div class="pos-table-title">By position <span>· same period and hours as the chart · each group's total, then its people from most to least loaded · ▴ to collapse a group</span></div>
+            <table class="gc-table" id="peopleByPositionTable"></table>
+          </div>
         </div>
 
         <div class="gc-card">
@@ -685,7 +698,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         <div class="gc-card-header">
           <div>
             <span class="gc-card-title">Projects &amp; Deals</span>
-            <div class="gc-card-sub">Drag rows to reorder — the order is saved and shared across all PLs</div>
+            <div class="gc-card-sub">Drag rows to reorder — the order is saved and shared across all PLs · to delete an item, archive it first</div>
           </div>
           <div style="display:flex; gap:8px;">
             <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="cleanupDeletedHistory()">🧹 Clean deleted-item history</button>
@@ -699,7 +712,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         <div class="gc-card-header">
           <div>
             <span class="gc-card-title">Archived Items <span class="gc-pill" id="archivedCount">0</span></span>
-            <div class="gc-card-sub">Hidden from submissions — restore (↻) to make them selectable again</div>
+            <div class="gc-card-sub">Hidden from submissions — restore (folder icon) to make them selectable again · delete (×) only items created by mistake: it's permanent</div>
           </div>
         </div>
         <div class="gc-card-body gc-table-wrap"><table class="gc-table" id="archivedTable"></table></div>
@@ -756,14 +769,13 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
         <div class="gc-card-header">
           <div>
             <span class="gc-card-title">Data &amp; backup</span>
-            <div class="gc-card-sub">Export or wipe all local data</div>
+            <div class="gc-card-sub">Export a backup or restore one</div>
           </div>
         </div>
         <div class="gc-card-body" style="display:flex; gap:10px; flex-wrap:wrap;">
           <button class="gc-btn gc-btn-ghost" onclick="exportAllJSON()">↓ Backup JSON</button>
           <button class="gc-btn gc-btn-ghost" onclick="document.getElementById('importJsonInput').click()">↑ Restore JSON</button>
           <input type="file" id="importJsonInput" accept=".json" style="display:none" onchange="importAllJSON(event)">
-          <button class="gc-btn gc-btn-danger" onclick="clearAllData()">× Wipe all</button>
         </div>
       </div>
     </section>
@@ -1141,6 +1153,15 @@ function roleLabel(role) { return role === 'Analyst' ? 'GC User' : role; }
 // Job position (seniority), separate from the access role.
 const POSITIONS = ['Partner', 'VP', 'Senior Associate', 'Associate', 'Senior Analyst', 'Analyst'];
 function positionBadge(pos) { return pos ? `<span class="gc-badge gc-badge-violet" title="Position">${escapeHtml(pos)}</span>` : ''; }
+// Someone can use the app without filling in the workload (e.g. a Partner who
+// only reads the dashboards). A PL/Admin turns "Logs hours" off in Team & Setup:
+// they then drop out of team statistics, checklists and reminders. Nothing is
+// deleted — their data comes back if the switch is turned on again.
+function tracksWorkload(u) { return !!u && u.tracks_workload !== false; }
+function statsRecords() {
+  const off = new Set(state.users.filter(u => !tracksWorkload(u)).map(u => u.id));
+  return off.size ? state.records.filter(r => !off.has(r.user_id)) : state.records;
+}
 // Week-lock helpers — a closed week cannot be edited by anyone until reopened.
 function isWeekClosed(week) { return state.closedWeeks instanceof Set && state.closedWeeks.has(week); }
 
@@ -1325,6 +1346,9 @@ function renderSubmit() {
     html += `<div class="notice notice-success">✔ You've already submitted for this week. ${actualLocked && forecastLocked ? 'Contact a PL to make further changes.' : 'You can edit the values below and resubmit.'}</div>`;
   } else if (actualRec || forecastRec) {
     html += `<div class="notice notice-info">You've only partially submitted. Complete the other column and resubmit.</div>`;
+  } else if (!tracksWorkload(u)) {
+    // Someone a PL marked as not logging hours: no deadline nagging.
+    html += `<div class="notice notice-info">You're not required to log hours: you're left out of the workload statistics and reminders. A PL can change this in Team &amp; Setup.</div>`;
   } else {
     const deadline = new Date(thisMon.getFullYear(), thisMon.getMonth(), thisMon.getDate(), 18, 0, 0);
     if (today >= deadline) {
@@ -1341,11 +1365,12 @@ function renderSubmit() {
   const lastSub = state.records.filter(r => r.user_id === u.id).sort((a,b) => (b.submitted_at||'').localeCompare(a.submitted_at||''))[0];
   const cycleDeadline = new Date(thisMon.getFullYear(), thisMon.getMonth(), thisMon.getDate(), 18, 0, 0);
   const cycleDone = !!(actualRec && forecastRec);
-  const pastDeadline = today >= cycleDeadline && !cycleDone;
+  const notRequired = !cycleDone && !tracksWorkload(u);
+  const pastDeadline = today >= cycleDeadline && !cycleDone && !notRequired;
   document.getElementById('submitStats').innerHTML = `
     <div><div class="gc-cp-stat-label">Status ${infoTip('Whether you have submitted this cycle. Actual and Forecast go in together when you hit Submit.')}</div>
       <div style="margin-top:6px;">
-        <span class="cycle-pill ${cycleDone ? 'done' : 'miss'}">${cycleDone ? '✓ Submitted' : '✗ Not submitted'}</span>
+        <span class="cycle-pill ${cycleDone ? 'done' : notRequired ? 'na' : 'miss'}">${cycleDone ? '✓ Submitted' : notRequired ? 'Not required' : '✗ Not submitted'}</span>
       </div></div>
     <div><div class="gc-cp-stat-label">Deadline ${infoTip('Soft deadline to submit both columns for this cycle. You can still submit after it, but please don’t make it a habit.')}</div><div class="gc-cp-stat-value ${pastDeadline ? 'red' : cycleDone ? 'lime' : 'wh'}" style="font-size:14px">Mon ${fmtWeekShort(forecastWeek)} · 18:00</div></div>
     <div><div class="gc-cp-stat-label">Actual week</div><div class="gc-cp-stat-value wh" style="font-size:14px">${fmtWeekRange(actualWeek)}</div></div>
@@ -1595,7 +1620,7 @@ async function toggleWeekClosed(week) {
   } else {
     // Warn if some approved users haven't fully submitted the cycle: actual for
     // this week + forecast for the next one (what the Submit tab sends together).
-    const approved = state.users.filter(u => (u.status || 'approved') === 'approved');
+    const approved = state.users.filter(u => (u.status || 'approved') === 'approved' && tracksWorkload(u));
     const fw = nextWeekYmd(week);
     const missing = approved.filter(u => {
       const hasA = state.records.some(r => r.user_id === u.id && r.week_start === week && r.type === 'actual');
@@ -1756,7 +1781,7 @@ function dashboardScopeRecords() {
   if (!me) return [];
   if (!isPL(me)) return state.records.filter(r => r.user_id === me.id);
   const sel = document.getElementById('dashScope');
-  return (sel && sel.value === 'me') ? state.records.filter(r => r.user_id === me.id) : state.records;
+  return (sel && sel.value === 'me') ? state.records.filter(r => r.user_id === me.id) : statsRecords();
 }
 
 function renderDashboard() {
@@ -1800,7 +1825,7 @@ function renderDashboard() {
 
   // Last stat: team view = people submitted; personal view = weeks logged.
   const lastStat = !personal
-    ? `<div><div class="gc-cp-stat-label">People submitted</div><div class="gc-cp-stat-value wh">${new Set(recs.map(r => r.user_id)).size}/${state.users.filter(u => (u.status||'approved')==='approved').length}</div></div>`
+    ? `<div><div class="gc-cp-stat-label">People submitted</div><div class="gc-cp-stat-value wh">${new Set(recs.map(r => r.user_id)).size}/${state.users.filter(u => (u.status||'approved')==='approved' && tracksWorkload(u)).length}</div></div>`
     : `<div><div class="gc-cp-stat-label">Weeks logged</div><div class="gc-cp-stat-value wh">${new Set(actualRecs.map(r => r.week_start)).size}</div></div>`;
 
   document.getElementById('dashStats').innerHTML = `
@@ -1901,7 +1926,7 @@ function drawWeekTrend(canvasId, weekTotals) {
 function renderPeopleMatrix() {
   const weeks = lastNMondays(8);
   const tbl = document.getElementById('peopleMatrixTable');
-  const users = [...state.users].sort((a,b)=>a.name.localeCompare(b.name));
+  const users = [...state.users].filter(tracksWorkload).sort((a,b)=>a.name.localeCompare(b.name));
   const recs = state.records;
 
   let headerCells = '<th>Person</th><th>Role</th>';
@@ -1954,7 +1979,7 @@ function periodLabel(weeks) {
 }
 // Most recent week that has at least one actual record with hours.
 function lastActualWeek() {
-  const ws = state.records.filter(r => r.type === 'actual' && r.entries && r.entries.length).map(r => r.week_start);
+  const ws = statsRecords().filter(r => r.type === 'actual' && r.entries && r.entries.length).map(r => r.week_start);
   return ws.length ? ws.sort().reverse()[0] : null;
 }
 
@@ -1979,7 +2004,7 @@ function renderPeopleLoadChart() {
   const metric = (document.getElementById('peopleLoadMetric') || {}).value || 'actual';
   const weeks = periodWeeks(rangeSel ? rangeSel.value : 'r:4');
   const weekSet = new Set(weeks);
-  const users = [...state.users].filter(x => (x.status || 'approved') === 'approved').sort((a,b)=>a.name.localeCompare(b.name));
+  const users = [...state.users].filter(x => (x.status || 'approved') === 'approved' && tracksWorkload(x)).sort((a,b)=>a.name.localeCompare(b.name));
   const projType = {}; state.projects.forEach(p => { projType[p.id] = (p.type === 'Deal') ? 'Deal' : 'Project'; });
 
   const metricLabel = metric === 'forecast' ? 'Forecast hours' : metric === 'both' ? 'Actual & forecast' : 'Actual hours';
@@ -2006,6 +2031,7 @@ function renderPeopleLoadChart() {
     return { pu, det };
   }
   const A = build('actual'), F = build('forecast');
+  renderPeopleByPosition(users, A, F, metric);
   const labels = users.map(u => u.name);
   const col = (src, t) => users.map(u => (src.pu[u.id] && src.pu[u.id][t]) || 0);
   const dsCommon = { borderColor: '#fff', borderWidth: 1, categoryPercentage: 0.82, barPercentage: 0.94, maxBarThickness: horiz ? 40 : 70 };
@@ -2090,12 +2116,81 @@ function renderPeopleLoadChart() {
   });
 }
 
+// "By position" table under the Workload-by-person chart: same people, period
+// and hours, grouped by job position (most senior first). Each group shows its
+// total and average, then its people from most to least loaded, with how far
+// each one is from the group average. With "Actual & forecast", Deals/Projects
+// and the comparison use actual hours; forecast gets its own column.
+const collapsedPositions = new Set();
+function renderPeopleByPosition(users, A, F, metric) {
+  const tbl = document.getElementById('peopleByPositionTable');
+  if (!tbl) return;
+  const both = metric === 'both';
+  const src = metric === 'forecast' ? F : A;
+  const val = (s, uid, t) => (s.pu[uid] && s.pu[uid][t]) || 0;
+  const hrs = (h) => h > 0 ? fmtHours(h) : '—';
+  const order = [...POSITIONS, '']; // '' = no position set
+  const groups = order.map((pos, gi) => {
+    const people = users.filter(u => (POSITIONS.includes(u.position) ? u.position : '') === pos).map(u => {
+      const deal = val(src, u.id, 'Deal'), proj = val(src, u.id, 'Project');
+      return { u, deal, proj, total: deal + proj, fc: val(F, u.id, 'Deal') + val(F, u.id, 'Project') };
+    }).sort((a, b) => (b.total - a.total) || a.u.name.localeCompare(b.u.name));
+    const sum = k => people.reduce((s, p) => s + p[k], 0);
+    return { key: String(gi), pos, people, deal: sum('deal'), proj: sum('proj'), total: sum('total'), fc: sum('fc') };
+  }).filter(g => g.people.length);
+
+  const totalLabel = metric === 'forecast' ? 'Forecast' : 'Actual';
+  const head = `<thead><tr><th>Position / person</th><th class="r">Deals</th><th class="r">Projects</th><th class="r">${totalLabel}</th>${both ? '<th class="r">Forecast</th>' : ''}<th class="r">vs group avg ${infoTip('Group rows: average hours per person in the group. People rows: how far each person is above (+) or below (−) that average.')}</th></tr></thead>`;
+  if (!groups.length) { tbl.innerHTML = head + `<tbody><tr><td colspan="${both ? 6 : 5}" class="gc-empty">No people.</td></tr></tbody>`; return; }
+
+  const body = groups.map(g => {
+    const n = g.people.length;
+    const avg = g.total / n;
+    const open = !collapsedPositions.has(g.key);
+    const groupRow = `<tr class="pos-group">
+      <td><button class="gc-icon-btn" title="Show / hide the people in this group" onclick="togglePositionGroup('${g.key}', this)">${open ? '▴' : '▾'}</button> ${g.pos ? positionBadge(g.pos) : '<span class="gc-badge gc-badge-gray">No position</span>'} <span style="font-weight:500;color:var(--gc-gray-60);font-size:12px;">${n} ${n === 1 ? 'person' : 'people'}</span></td>
+      <td class="r">${hrs(g.deal)}</td>
+      <td class="r">${hrs(g.proj)}</td>
+      <td class="r m">${fmtHours(g.total)}</td>
+      ${both ? `<td class="r">${fmtHours(g.fc)}</td>` : ''}
+      <td class="r" style="font-weight:500;">avg ${fmtHours(avg)}</td>
+    </tr>`;
+    const memberRows = g.people.map(p => {
+      let delta = '<span class="pos-delta even">—</span>';
+      if (n > 1 && avg > 0) {
+        const pct = Math.round((p.total - avg) / avg * 100);
+        const cls = pct >= 10 ? 'up' : pct <= -10 ? 'down' : 'even';
+        delta = `<span class="pos-delta ${cls}">${pct > 0 ? '+' : pct < 0 ? '−' : ''}${Math.abs(pct)}%</span>`;
+      }
+      return `<tr class="pos-member" data-pos-group="${g.key}"${open ? '' : ' style="display:none;"'}>
+        <td class="m">${escapeHtml(p.u.name)}</td>
+        <td class="r">${hrs(p.deal)}</td>
+        <td class="r">${hrs(p.proj)}</td>
+        <td class="r m">${fmtHours(p.total)}</td>
+        ${both ? `<td class="r">${fmtHours(p.fc)}</td>` : ''}
+        <td class="r">${delta}</td>
+      </tr>`;
+    }).join('');
+    return groupRow + memberRows;
+  }).join('');
+
+  const all = groups.reduce((s, g) => ({ n: s.n + g.people.length, deal: s.deal + g.deal, proj: s.proj + g.proj, total: s.total + g.total, fc: s.fc + g.fc }), { n: 0, deal: 0, proj: 0, total: 0, fc: 0 });
+  const totalRow = `<tr class="total-row"><td>All positions · ${all.n} ${all.n === 1 ? 'person' : 'people'}</td><td class="r">${fmtHours(all.deal)}</td><td class="r">${fmtHours(all.proj)}</td><td class="r">${fmtHours(all.total)}</td>${both ? `<td class="r">${fmtHours(all.fc)}</td>` : ''}<td class="r">avg ${fmtHours(all.n ? all.total / all.n : 0)}</td></tr>`;
+  tbl.innerHTML = head + `<tbody>${body}${totalRow}</tbody>`;
+}
+function togglePositionGroup(key, btn) {
+  const open = collapsedPositions.has(key); // currently collapsed → open it
+  if (open) collapsedPositions.delete(key); else collapsedPositions.add(key);
+  document.querySelectorAll(`#peopleByPositionTable tr[data-pos-group="${key}"]`).forEach(tr => { tr.style.display = open ? '' : 'none'; });
+  btn.textContent = open ? '▴' : '▾';
+}
+
 // ── Weekly trend for a single person ─────────────────────────
 let chartPersonTrendInstance = null;
 function renderPersonTrend() {
   const sel = document.getElementById('personTrendUser');
   if (!sel) return;
-  const users = [...state.users].filter(x => (x.status || 'approved') === 'approved').sort((a,b)=>a.name.localeCompare(b.name));
+  const users = [...state.users].filter(x => (x.status || 'approved') === 'approved' && tracksWorkload(x)).sort((a,b)=>a.name.localeCompare(b.name));
   if (sel.options.length !== users.length) {
     const cur = sel.value;
     const me = currentUser();
@@ -2167,8 +2262,9 @@ function breakdownData() {
   const rv = rangeSel ? rangeSel.value : 'r:13';
   const weekSet = (rv === 'all') ? null : new Set(periodWeeks(rv));
   const inScope = (r) => (userId === '__all' || r.user_id === userId) && (!weekSet || weekSet.has(r.week_start));
+  const src = userId === '__all' ? statsRecords() : state.records; // team view leaves out people who don't log hours
   const map = {};
-  const add = (type) => state.records.filter(r => r.type === type && inScope(r)).forEach(r => r.entries.forEach(e => {
+  const add = (type) => src.filter(r => r.type === type && inScope(r)).forEach(r => r.entries.forEach(e => {
     (map[e.project_id] = map[e.project_id] || { actual: 0, forecast: 0 })[type] += Number(e.hours) || 0;
   }));
   add('actual'); add('forecast');
@@ -2199,7 +2295,7 @@ function renderBreakdown() {
   const userWrap = document.getElementById('breakdownUserWrap');
   if (userWrap) userWrap.style.display = pl ? '' : 'none';
   if (pl) {
-    const approved = [...state.users].filter(x => (x.status || 'approved') === 'approved').sort((a, b) => a.name.localeCompare(b.name));
+    const approved = [...state.users].filter(x => (x.status || 'approved') === 'approved' && tracksWorkload(x)).sort((a, b) => a.name.localeCompare(b.name));
     if (userSel.options.length !== approved.length + 1) {
       const cur = userSel.value;
       userSel.innerHTML = '<option value="__all">All team</option>' + approved.map(x => `<option value="${x.id}">${escapeHtml(x.name)}</option>`).join('');
@@ -2263,7 +2359,7 @@ function populateCyclePicker(sel) {
   sel.value = curFw;
 }
 function checklistRowsFor(actualWeek, forecastWeek) {
-  const users = [...state.users].filter(x => (x.status || 'approved') === 'approved');
+  const users = [...state.users].filter(x => (x.status || 'approved') === 'approved' && tracksWorkload(x));
   const rows = users.map(u => {
     const a = findRecord(u.id, actualWeek, 'actual');
     const f = findRecord(u.id, forecastWeek, 'forecast');
@@ -2443,9 +2539,10 @@ function toggleProjectPeople(pid, mode, btn) {
   }
   // Review mode counts only approved users (to match the by-project totals,
   // built from approved users); breakdown mode counts everyone, like its parent.
+  // Both leave out people who don't log hours, as their parent totals do.
   const approvedOnly = mode === 'review';
   const people = Object.entries(per).map(([uid, v]) => ({ u: state.users.find(x => x.id === uid), a: v.a, f: v.f }))
-    .filter(x => x.u && (x.a > 0 || x.f > 0) && (!approvedOnly || (x.u.status || 'approved') === 'approved'))
+    .filter(x => x.u && tracksWorkload(x.u) && (x.a > 0 || x.f > 0) && (!approvedOnly || (x.u.status || 'approved') === 'approved'))
     .sort((x, y) => (y.a + y.f) - (x.a + x.f) || x.u.name.localeCompare(y.u.name));
   const pad = mode === 'review' ? 2 : 4; // trailing empty cells to match parent table width
   const rowsHtml = people.length
@@ -2558,6 +2655,11 @@ function copyMissingEmails() {
 // =========================================================
 // PROJECTS (PL) — with drag-and-drop ordering
 // =========================================================
+// Folder icons for archive (arrow into the folder) and restore (arrow out of it).
+const FOLDER_SVG = (arrow) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>${arrow}</svg>`;
+const ICON_ARCHIVE = FOLDER_SVG('<path d="M12 10v6"/><path d="M9 13l3 3 3-3"/>');
+const ICON_RESTORE = FOLDER_SVG('<path d="M12 16v-6"/><path d="M9 13l3-3 3 3"/>');
+// Active items can only be archived; deleting is offered on archived items only.
 function projectRowHtml(p) {
   const draggable = p.status === 'active';
   return `<tr ${draggable?`draggable="true" data-pid="${p.id}"`:''}>
@@ -2570,8 +2672,10 @@ function projectRowHtml(p) {
     <td class="r">
       <div class="gc-row-actions">
         <button class="gc-icon-btn" title="Edit" onclick="openProjectModal('${p.id}')">✎</button>
-        <button class="gc-icon-btn" title="${p.status==='active'?'Archive':'Restore (unarchive)'}" onclick="toggleProjectStatus('${p.id}')">↻</button>
-        <button class="gc-icon-btn danger" title="Delete permanently" onclick="deleteProject('${p.id}')">×</button>
+        ${p.status === 'active'
+          ? `<button class="gc-icon-btn" title="Archive" aria-label="Archive" onclick="toggleProjectStatus('${p.id}')">${ICON_ARCHIVE}</button>`
+          : `<button class="gc-icon-btn" title="Restore (unarchive)" aria-label="Restore" onclick="toggleProjectStatus('${p.id}')">${ICON_RESTORE}</button>
+             <button class="gc-icon-btn danger" title="Delete permanently (only for items created by mistake)" onclick="deleteProject('${p.id}')">×</button>`}
       </div>
     </td>
   </tr>`;
@@ -2725,13 +2829,24 @@ function toggleProjectStatus(id) {
 async function deleteProject(id) {
   const p = state.projects.find(x => x.id === id);
   if (!p) return;
-  const used = state.records.some(r => r.entries.some(e => e.project_id === id));
-  const msg = used
-    ? `Permanently delete “${p.name}”?\n\nIt has logged hours. Past submissions keep those hours but will show the item as “(deleted)” in History and dashboards. This cannot be undone — consider archiving instead.`
-    : `Permanently delete “${p.name}”? This cannot be undone.`;
+  if (p.status !== 'archived') { alert('Only archived items can be deleted. Archive it first (folder icon).'); return; }
+  const usedBy = new Set();
+  const hours = { actual: 0, forecast: 0 };
+  state.records.forEach(r => r.entries.forEach(e => { if (e.project_id === id) { hours[r.type === 'actual' ? 'actual' : 'forecast'] += Number(e.hours) || 0; usedBy.add(r.user_id); } }));
+  let msg = `⚠ Permanently delete “${p.name}”?\n\nOnce deleted it is gone forever and cannot be recovered.\nOnly delete an item that was created by mistake — if it is simply finished, keep it archived.`;
+  if (usedBy.size) msg += `\n\nIt has hours logged by ${usedBy.size} ${usedBy.size === 1 ? 'person' : 'people'} (${fmtHours(hours.actual)} actual, ${fmtHours(hours.forecast)} forecast): past submissions keep those hours, but the item will show as “(deleted)” in History and dashboards.`;
   if (!confirm(msg)) return;
-  const { error } = await sb.from('projects').delete().eq('id', id);
+  // Items with logged hours need a second, typed confirmation.
+  if (usedBy.size) {
+    const typed = prompt(`To confirm, type DELETE (in capitals) to permanently delete “${p.name}”.`);
+    if (typed == null) return;
+    if (typed.trim() !== 'DELETE') { alert('Not deleted — the confirmation text did not match.'); return; }
+  }
+  // The database only deletes it if it is still archived there (another PL may
+  // have restored it meanwhile); zero rows back means nothing was deleted.
+  const { data, error } = await sb.from('projects').delete().eq('id', id).eq('status', 'archived').select('id');
   if (error) { alert('Could not delete: ' + error.message); return; }
+  if (!data || !data.length) { alert('Not deleted: the item is no longer archived or no longer exists. Reload the page to see the latest state.'); return; }
   state.projects = state.projects.filter(x => x.id !== id);
   renderProjects();
   flashNotice('Item deleted.');
@@ -2796,16 +2911,18 @@ function renderSettings() {
       <td>
         <select class="gc-select small" style="font-size:12px;padding:4px 8px;" onchange="changeUserPosition('${u.id}', this.value)">${posOpts}</select>
       </td>
+      <td class="c"><input type="checkbox" ${tracksWorkload(u) ? 'checked' : ''} title="${tracksWorkload(u) ? 'Logs hours — counted in statistics' : 'Does not log hours — left out of statistics'}" onchange="setTracksWorkload('${u.id}', this.checked)"></td>
       <td>${fmtDate(u.created_at)}</td>
       <td class="r"><div class="gc-row-actions">
         ${isMe && u.role === 'PL' ? `<button class="gc-btn gc-btn-primary gc-btn-sm" title="Take the Admin role (lets you close/reopen weeks)" onclick="selfPromoteToAdmin()">Become Admin</button>` : ''}
+        <button class="gc-icon-btn" title="Edit name" onclick="renameUser('${u.id}')">✎</button>
         <button class="gc-icon-btn" title="Reset password" onclick="resetUserPassword('${u.id}')">🔑</button>
         ${isMe ? '' : `<button class="gc-icon-btn danger" title="Delete user" onclick="deleteUser('${u.id}')">×</button>`}
       </div></td>
     </tr>`;
   }).join('');
   document.getElementById('usersTable').innerHTML = `
-    <thead><tr><th>User</th><th>Role</th><th>Position</th><th>Created</th><th class="r">Actions</th></tr></thead>
+    <thead><tr><th>User</th><th>Role</th><th>Position</th><th class="c">Logs hours ${infoTip('Untick for people who use the app but do not fill in the workload: they are left out of statistics, the submission check and reminders. Nothing is deleted — tick again to bring them back.')}</th><th>Created</th><th class="r">Actions</th></tr></thead>
     <tbody>${rows}</tbody>
   `;
 
@@ -2891,6 +3008,55 @@ async function changeUserPosition(id, position) {
   u.position = val;
   flashNotice(`${u.name}: position set to ${val || '—'}.`);
 }
+// Person pickers only rebuild when their option count changes; empty them so a
+// rename or a "Logs hours" change shows up the next time they render.
+function resetPeoplePickers() {
+  ['breakdownUser', 'personTrendUser', 'historyUserSelect'].forEach(id => { const s = document.getElementById(id); if (s) s.innerHTML = ''; });
+}
+async function setTracksWorkload(id, on) {
+  const u = state.users.find(x => x.id === id);
+  if (!u) return;
+  if (tracksWorkload(u) === on) return;
+  const msg = on
+    ? `Count ${u.name} in the workload again?\n\nThey will be back in statistics, the submission check and reminders, together with their past hours.`
+    : `Leave ${u.name} out of the workload?\n\nUse this for people who don't fill in the workload. They disappear from statistics, the submission check and reminders.\n\nNothing is deleted: their past data is kept and comes back if you tick the box again.`;
+  if (!confirm(msg)) { renderSettings(); return; }
+  const { data, error } = await sb.from('profiles').update({ tracks_workload: on }).eq('id', id).select('id');
+  if (error || !data || !data.length) {
+    const missingCol = error && /tracks_workload/.test(error.message || '');
+    alert('Could not update: ' + (error ? error.message : 'no change was saved.') + (missingCol ? '\n\nThe database update (MIGRATION 7) has not been run yet.' : ''));
+    renderSettings();
+    return;
+  }
+  u.tracks_workload = on;
+  if (state.currentUser && state.currentUser.id === id) state.currentUser.tracks_workload = on;
+  resetPeoplePickers();
+  renderSettings();
+  flashNotice(on ? `${u.name} is counted in the workload again.` : `${u.name} is now left out of the workload statistics.`);
+}
+// Fix a user's display name (e.g. a missing surname) without touching their data:
+// submissions are linked to the user's id, not to the name.
+async function renameUser(id) {
+  const u = state.users.find(x => x.id === id);
+  if (!u) return;
+  const input = prompt(`Full name (first name and surname) for ${u.email}:`, u.name || '');
+  if (input == null) return; // cancelled
+  const name = input.replace(/\s+/g, ' ').trim();
+  if (!name) { alert('The name cannot be empty.'); return; }
+  if (name.length > 100) { alert('That name is too long (max 100 characters).'); return; }
+  if (name === u.name) return;
+  const { data, error } = await sb.from('profiles').update({ name }).eq('id', id).select('id');
+  if (error || !data || !data.length) { alert('Could not rename: ' + (error ? error.message : 'no change was saved.')); return; }
+  const old = u.name;
+  u.name = name;
+  if (state.currentUser && state.currentUser.id === id) {
+    state.currentUser.name = name;
+    document.getElementById('hdrUserName').textContent = name;
+  }
+  resetPeoplePickers();
+  renderSettings();
+  flashNotice(`Renamed “${old}” to “${name}”.`);
+}
 async function changeUserRole(id, role) {
   const u = state.users.find(x => x.id === id);
   if (!u) return;
@@ -2961,7 +3127,7 @@ function exportPeopleMatrix() {
   const weeks = lastNMondays(13);
   const header = ['Person','Email','Role', ...weeks.flatMap(w => [`${fmtWeekShort(w)} A`, `${fmtWeekShort(w)} F`])];
   const data = [header];
-  [...state.users].sort((a,b)=>a.name.localeCompare(b.name)).forEach(u => {
+  [...state.users].filter(tracksWorkload).sort((a,b)=>a.name.localeCompare(b.name)).forEach(u => {
     const row = [u.name, u.email, roleLabel(u.role)];
     weeks.forEach(w => {
       const a = state.records.find(r => r.user_id===u.id && r.week_start===w && r.type==='actual');
@@ -3018,17 +3184,6 @@ function importAllJSON(ev) {
   r.readAsText(f);
   ev.target.value = '';
 }
-async function clearAllData() {
-  if (!confirm('Wipe ALL projects, submissions and settings from Supabase? This cannot be undone. You will be signed out.')) return;
-  await Promise.all([
-    sb.from('records').delete().not('id', 'is', null),
-    sb.from('projects').delete().not('id', 'is', null),
-    sb.from('settings').update({ edit_window_days: 14, hours_per_week_target: 40 }).eq('id', 1),
-  ]);
-  await sb.auth.signOut();
-  location.reload();
-}
-
 // =========================================================
 // HELPERS
 // =========================================================

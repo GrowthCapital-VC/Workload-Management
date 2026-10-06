@@ -551,3 +551,42 @@ begin
   return new;
 end;
 $$;
+
+-- =============================================================
+-- MIGRATION 7 — "Logs hours" switch per user
+-- (idempotent — safe to run on the live database; deletes nothing)
+--
+-- tracks_workload = true for everyone by default, so nothing changes until a
+-- PL/Admin unticks "Logs hours" for someone in Team & Setup. That person (e.g.
+-- a Partner who only reads the dashboards) then drops out of statistics,
+-- checklists and reminders. Their data is kept; ticking it again restores it.
+-- =============================================================
+alter table public.profiles
+  add column if not exists tracks_workload boolean not null default true;
+
+-- Guard: only a PL/Admin may change it (plus all the earlier rules, unchanged).
+create or replace function public.guard_profile_change()
+returns trigger language plpgsql security definer as $$
+begin
+  if auth.uid() is null then return new; end if;
+  if new.role is distinct from old.role then
+    if not public.is_pl() then
+      raise exception 'Only a PL can change a user role.';
+    end if;
+    if old.role in ('PL', 'Admin') and new.role = 'Analyst'
+       and (select count(*) from public.profiles where role in ('PL', 'Admin')) <= 1 then
+      raise exception 'Cannot remove the last remaining PL/Admin.';
+    end if;
+  end if;
+  if new.status is distinct from old.status and not public.is_pl() then
+    raise exception 'Only a PL can approve or reject a user.';
+  end if;
+  if new.position is distinct from old.position and not public.is_pl() then
+    raise exception 'Only a PL can change a job position.';
+  end if;
+  if new.tracks_workload is distinct from old.tracks_workload and not public.is_pl() then
+    raise exception 'Only a PL can change whether a user logs hours.';
+  end if;
+  return new;
+end;
+$$;
