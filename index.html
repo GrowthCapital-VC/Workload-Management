@@ -269,6 +269,24 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
 .pos-delta.up { color:#C0570A; }
 .pos-delta.down { color:var(--gc-blue); }
 .pos-delta.even { color:var(--gc-gray-60); font-weight:500; }
+/* Workload matrix: items × people (or position groups), like the weekly Excel */
+.wl-matrix { font-size:12px; }
+.wl-matrix thead th { text-align:center; padding:6px 8px; }
+.wl-matrix thead th.mx-col { white-space:normal; min-width:64px; max-width:96px; text-transform:none; letter-spacing:0; font-size:11px; color:var(--gc-gray-20); line-height:1.25; vertical-align:bottom; }
+.wl-matrix thead tr.mx-sub th { text-transform:none; letter-spacing:0; font-family:'Montserrat',sans-serif; font-weight:600; font-size:12px; color:var(--gc-gray-20); border-bottom:1px solid var(--gc-gray-90); }
+.wl-matrix thead tr.mx-sub:last-child th { border-bottom:2px solid var(--gc-gray-80); }
+.wl-matrix th:first-child, .wl-matrix td:first-child { position:sticky; left:0; z-index:1; text-align:left; min-width:190px; box-shadow:1px 0 0 var(--gc-gray-90); }
+.wl-matrix thead th:first-child { background:var(--gc-offwhite); color:var(--gc-gray-40); font-weight:600; }
+.wl-matrix tbody td { padding:6px 8px; text-align:center; }
+.wl-matrix tbody td:first-child { background:#fff; font-family:'Space Grotesk',sans-serif; font-weight:500; }
+.wl-matrix tbody tr:hover td:first-child { background:var(--gc-offwhite); }
+.wl-matrix .mx-total { font-weight:700; border-left:2px solid var(--gc-gray-90); background:var(--gc-offwhite); }
+.wl-matrix tbody tr.total-row td:first-child { background:var(--gc-offwhite); }
+.mx-load { display:inline-block; min-width:40px; padding:2px 6px; border-radius:4px; font-weight:700; }
+.mx-load.ok { background:#E3F5D0; color:#2E6B0E; }
+.mx-load.high { background:#FFE3C2; color:#9A4A00; }
+.mx-load.over { background:#FDD6D3; color:#B3261E; }
+.mx-zero { color:var(--gc-gray-60); }
 .detail-row .detail-inner { padding:14px 20px; }
 .detail-table { width:100%; font-size:12px; }
 .detail-table th { font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:0.8px; color:var(--gc-gray-40); padding:6px 8px; text-align:left; }
@@ -579,6 +597,38 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
             <div class="pos-table-title">By position <span>· same period and hours as the chart · each group's total, then its people from most to least loaded · ▴ to collapse a group</span></div>
             <table class="gc-table" id="peopleByPositionTable"></table>
           </div>
+        </div>
+
+        <div class="gc-card">
+          <div class="gc-card-header">
+            <div>
+              <span class="gc-card-title">Workload matrix</span>
+              <div class="gc-card-sub" id="matrixSub">Hours per item and person</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+              <div class="gc-form-group" style="margin-bottom:0; min-width:150px;">
+                <label>Columns</label>
+                <select class="gc-select" id="matrixMode" onchange="renderWorkloadMatrix()">
+                  <option value="person" selected>By person</option>
+                  <option value="group">By position</option>
+                </select>
+              </div>
+              <div class="gc-form-group" style="margin-bottom:0; min-width:120px;">
+                <label>Show</label>
+                <select class="gc-select" id="matrixMetric" onchange="renderWorkloadMatrix()">
+                  <option value="forecast" selected>Forecast</option>
+                  <option value="actual">Actual</option>
+                </select>
+              </div>
+              <div class="gc-form-group" style="margin-bottom:0; min-width:240px;">
+                <label>Period</label>
+                <select class="gc-select" id="matrixRange" onchange="renderWorkloadMatrix()"></select>
+              </div>
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--gc-gray-40); padding-bottom:9px; cursor:pointer;"><input type="checkbox" id="matrixOnlyUsed" onchange="renderWorkloadMatrix()"> Only items with hours</label>
+              <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="exportWorkloadMatrix()">↓ Excel</button>
+            </div>
+          </div>
+          <div class="gc-card-body gc-table-wrap"><table class="gc-table wl-matrix" id="workloadMatrixTable"></table></div>
         </div>
 
         <div class="gc-card">
@@ -1844,7 +1894,7 @@ function renderDashboard() {
   // Team-wide per-person views (hidden for GC Users, who only see their own data).
   const teamWrap = document.getElementById('dashTeamViews');
   if (teamWrap) teamWrap.style.display = pl ? '' : 'none';
-  if (pl) { renderPeopleLoadChart(); renderPersonTrend(); }
+  if (pl) { renderPeopleLoadChart(); renderWorkloadMatrix(); renderPersonTrend(); }
 }
 
 function sumEntries(recs) {
@@ -2183,6 +2233,131 @@ function togglePositionGroup(key, btn) {
   if (open) collapsedPositions.delete(key); else collapsedPositions.add(key);
   document.querySelectorAll(`#peopleByPositionTable tr[data-pos-group="${key}"]`).forEach(tr => { tr.style.display = open ? '' : 'none'; });
   btn.textContent = open ? '▴' : '▾';
+}
+
+// ── Workload matrix (Dashboard) ──────────────────────────────
+// Items × people (or × position groups) for a period, like the weekly Excel
+// forecast: on top each column's total (coloured against the weekly target)
+// and number of items, then hours per item, with item totals on the right.
+const POSITION_SHORT = { 'Senior Associate': 'Snr Assoc', 'Senior Analyst': 'Snr Analyst' };
+function positionShortBadge(pos) {
+  return pos ? `<span class="gc-badge gc-badge-violet" title="${escapeHtml(pos)}">${escapeHtml(POSITION_SHORT[pos] || pos)}</span>` : '<span class="gc-badge gc-badge-gray">—</span>';
+}
+// Single weeks start from the week being forecast in the current cycle.
+function populateMatrixPeriod(sel) {
+  if (!sel || sel.options.length) return;
+  const fw = submitThisMonday();
+  const weeks = [];
+  for (let i = 0; i < 52; i++) weeks.push(ymd(addDays(fw, -7 * i)));
+  const tag = i => i === 0 ? ' (current forecast)' : i === 1 ? ' (last actual)' : '';
+  const singles = weeks.map((w, i) => `<option value="w:${w}">W${isoWeekNumber(parseYmd(w))} · ${fmtWeekRange(w)}${tag(i)}</option>`).join('');
+  const ranges = [4, 8, 13, 26, 52].map(n => `<option value="r:${n}">Last ${n} weeks</option>`).join('');
+  sel.innerHTML = `<optgroup label="Single week">${singles}</optgroup><optgroup label="Ranges">${ranges}</optgroup>`;
+  sel.value = 'w:' + weeks[0];
+}
+// green up to the weekly target (× weeks), amber up to +40%, red above.
+function loadClass(h, weeksN) {
+  const t = (Number(state.settings.hours_per_week_target) || 0) * weeksN;
+  if (!t || h <= 0) return '';
+  return h <= t ? 'ok' : h <= t * 1.4 ? 'high' : 'over';
+}
+function fmtNum(h) { return (Number(h) || 0).toFixed(1).replace(/\.0$/, ''); }
+function workloadMatrixData() {
+  const mode = (document.getElementById('matrixMode') || {}).value === 'group' ? 'group' : 'person';
+  const metric = (document.getElementById('matrixMetric') || {}).value === 'actual' ? 'actual' : 'forecast';
+  const sel = document.getElementById('matrixRange');
+  const weeks = periodWeeks(sel && sel.value ? sel.value : 'w:' + ymd(submitThisMonday()));
+  const weekSet = new Set(weeks);
+  const onlyUsed = !!(document.getElementById('matrixOnlyUsed') || {}).checked;
+  // Same people as the other team views: approved and logging hours, most senior first.
+  const rank = u => { const i = POSITIONS.indexOf(u.position); return i < 0 ? POSITIONS.length : i; };
+  const users = state.users.filter(u => (u.status || 'approved') === 'approved' && tracksWorkload(u))
+    .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  const posOf = u => POSITIONS.includes(u.position) ? u.position : '';
+  const cols = mode === 'group'
+    ? [...new Set(users.map(posOf))].map(pos => ({ label: pos || 'No position', position: pos, members: users.filter(u => posOf(u) === pos).map(u => u.id) }))
+    : users.map(u => ({ label: u.name, position: u.position, members: [u.id] }));
+  const colOf = {};
+  cols.forEach((c, i) => c.members.forEach(id => { colOf[id] = i; }));
+  const DELETED = '__deleted';
+  const known = new Set(state.projects.map(p => p.id));
+  const hours = {}; // item id → hours per column
+  state.records.forEach(r => {
+    if (r.type !== metric || !weekSet.has(r.week_start) || colOf[r.user_id] == null) return;
+    r.entries.forEach(e => {
+      const h = Number(e.hours) || 0;
+      if (!h) return;
+      const pid = known.has(e.project_id) ? e.project_id : DELETED;
+      (hours[pid] = hours[pid] || cols.map(() => 0))[colOf[r.user_id]] += h;
+    });
+  });
+  // Rows in the Projects order: active items always (unless "only with hours"),
+  // archived ones only when they have hours, deleted items grouped at the end.
+  const items = sortedProjects(state.projects).filter(p => hours[p.id] || (p.status === 'active' && !onlyUsed));
+  if (hours[DELETED]) items.push({ id: DELETED, name: '(deleted items)', type: 'Project', code: '' });
+  const rows = items.map(p => {
+    const cells = hours[p.id] || cols.map(() => 0);
+    return { id: p.id, name: p.name, code: p.code || '', type: p.type || 'Project', cells, total: cells.reduce((s, x) => s + x, 0) };
+  });
+  const colTotals = cols.map((_, i) => rows.reduce((s, r) => s + r.cells[i], 0));
+  const colItems = cols.map((_, i) => rows.filter(r => r.cells[i] > 0).length);
+  const grand = colTotals.reduce((s, x) => s + x, 0);
+  return { mode, metric, weeks, cols, rows, colTotals, colItems, grand, people: users.length, usedItems: rows.filter(r => r.total > 0).length };
+}
+function renderWorkloadMatrix() {
+  const tbl = document.getElementById('workloadMatrixTable');
+  if (!tbl) return;
+  populateMatrixPeriod(document.getElementById('matrixRange'));
+  const d = workloadMatrixData();
+  const group = d.mode === 'group';
+  const mLabel = d.metric === 'forecast' ? 'Forecast' : 'Actual';
+  const sub = document.getElementById('matrixSub');
+  if (sub) sub.textContent = `${mLabel} hours per item and ${group ? 'position' : 'person'} · ${periodLabel(d.weeks)}`;
+  if (!d.cols.length) { tbl.innerHTML = '<tbody><tr><td class="gc-empty">No people.</td></tr></tbody>'; return; }
+  const n = d.weeks.length;
+  const target = Number(state.settings.hours_per_week_target) || 0;
+  const pill = (h, ref) => h > 0 ? `<span class="mx-load ${loadClass(ref, n)}">${fmtNum(h)}</span>` : '<span class="mx-zero">0</span>';
+  const tip = infoTip(`Coloured against the weekly target (${target}h${n > 1 ? ' × ' + n + ' weeks' : ''}): green up to the target, amber up to +40%, red above.`);
+  const teamAvg = d.people ? d.grand / d.people : 0;
+
+  const groupHead = c => c.position ? positionShortBadge(c.position) : '<span class="gc-badge gc-badge-gray">No position</span>';
+  let head = `<tr><th>${group ? 'Position' : 'Name'}</th>${d.cols.map(c => `<th class="mx-col">${group ? groupHead(c) : escapeHtml(c.label)}</th>`).join('')}<th class="mx-col mx-total">Total</th></tr>`;
+  if (group) {
+    head += `<tr class="mx-sub"><th>People</th>${d.cols.map(c => `<th>${c.members.length}</th>`).join('')}<th class="mx-total">${d.people}</th></tr>`;
+    head += `<tr class="mx-sub"><th>${mLabel} hours</th>${d.cols.map((c, i) => `<th>${fmtNum(d.colTotals[i])}</th>`).join('')}<th class="mx-total">${fmtNum(d.grand)}</th></tr>`;
+    head += `<tr class="mx-sub"><th>Avg per person ${tip}</th>${d.cols.map((c, i) => { const a = d.colTotals[i] / c.members.length; return `<th>${pill(a, a)}</th>`; }).join('')}<th class="mx-total">${pill(teamAvg, teamAvg)}</th></tr>`;
+  } else {
+    head += `<tr class="mx-sub"><th>Position</th>${d.cols.map(c => `<th>${positionShortBadge(c.position)}</th>`).join('')}<th class="mx-total"></th></tr>`;
+    head += `<tr class="mx-sub"><th>${mLabel} hours ${tip}</th>${d.cols.map((c, i) => `<th>${pill(d.colTotals[i], d.colTotals[i])}</th>`).join('')}<th class="mx-total" title="Team total · average per person">${fmtNum(d.grand)}<div style="font-size:10px;font-weight:500;color:var(--gc-gray-60);">avg ${fmtNum(teamAvg)}</div></th></tr>`;
+  }
+  head += `<tr class="mx-sub"><th># of items</th>${d.colItems.map(x => `<th>${x}</th>`).join('')}<th class="mx-total">${d.usedItems}</th></tr>`;
+
+  const body = d.rows.map(r => `<tr>
+      <td>${projectTypeBadge(r.type)} ${escapeHtml(r.name)}${r.code ? ` <span class="proj-code">${escapeHtml(r.code)}</span>` : ''}</td>
+      ${r.cells.map(h => `<td>${h > 0 ? fmtNum(h) : ''}</td>`).join('')}
+      <td class="mx-total">${r.total > 0 ? fmtNum(r.total) : ''}</td>
+    </tr>`).join('');
+  const foot = d.rows.length
+    ? `<tr class="total-row"><td>Total</td>${d.colTotals.map(h => `<td>${fmtNum(h)}</td>`).join('')}<td class="mx-total">${fmtNum(d.grand)}</td></tr>`
+    : `<tr><td colspan="${d.cols.length + 2}" class="gc-empty">No items${d.grand ? '' : ' with hours in this period'}.</td></tr>`;
+  tbl.innerHTML = `<thead>${head}</thead><tbody>${body}${foot}</tbody>`;
+}
+function exportWorkloadMatrix() {
+  const d = workloadMatrixData();
+  const group = d.mode === 'group';
+  const mLabel = d.metric === 'forecast' ? 'Forecast' : 'Actual';
+  const data = [[group ? 'Position' : 'Name', ...d.cols.map(c => c.label), 'Total']];
+  if (group) {
+    data.push(['People', ...d.cols.map(c => c.members.length), d.people]);
+    data.push([`${mLabel} hours`, ...d.colTotals, d.grand]);
+    data.push(['Avg per person', ...d.cols.map((c, i) => Math.round(d.colTotals[i] / c.members.length * 10) / 10), d.people ? Math.round(d.grand / d.people * 10) / 10 : 0]);
+  } else {
+    data.push(['Position', ...d.cols.map(c => c.position || ''), '']);
+    data.push([`${mLabel} hours`, ...d.colTotals, d.grand]);
+  }
+  data.push(['# of items', ...d.colItems, d.usedItems]);
+  d.rows.forEach(r => data.push([r.name + (r.code ? ` (${r.code})` : ''), ...r.cells.map(h => h || ''), r.total || '']));
+  downloadXlsx(`workload_matrix_${group ? 'by_position' : 'by_person'}_${d.metric}_${d.weeks[0]}.xlsx`, 'Matrix', data);
 }
 
 // ── Weekly trend for a single person ─────────────────────────
