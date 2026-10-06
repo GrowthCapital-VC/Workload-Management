@@ -269,20 +269,32 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
 .pos-delta.up { color:#C0570A; }
 .pos-delta.down { color:var(--gc-blue); }
 .pos-delta.even { color:var(--gc-gray-60); font-weight:500; }
-/* Workload matrix: items × people (or position groups), like the weekly Excel */
-.wl-matrix { font-size:12px; }
-.wl-matrix thead th { text-align:center; padding:6px 8px; }
-.wl-matrix thead th.mx-col { white-space:normal; min-width:64px; max-width:96px; text-transform:none; letter-spacing:0; font-size:11px; color:var(--gc-gray-20); line-height:1.25; vertical-align:bottom; }
-.wl-matrix thead tr.mx-sub th { text-transform:none; letter-spacing:0; font-family:'Montserrat',sans-serif; font-weight:600; font-size:12px; color:var(--gc-gray-20); border-bottom:1px solid var(--gc-gray-90); }
+/* Workload matrix: items × people (or position groups), like the weekly Excel.
+   Kept compact so the whole grid fits one standard 1920×1080 screen. */
+.mx-card .gc-card-header { padding:8px 14px; }
+.mx-card .gc-card-body { padding:8px 10px 10px; }
+.mx-card .gc-form-group label { margin-bottom:2px; font-size:10px; }
+.mx-card .gc-select { padding:4px 8px; font-size:12px; }
+.wl-matrix { font-size:11px; }
+.wl-matrix thead th { text-align:center; padding:3px 3px; line-height:16px; }
+.wl-matrix thead th.mx-col { text-transform:none; letter-spacing:0; font-size:11px; color:var(--gc-gray-20); white-space:nowrap; max-width:72px; overflow:hidden; text-overflow:ellipsis; }
+.wl-matrix thead tr.mx-sub th { text-transform:none; letter-spacing:0; font-family:'Montserrat',sans-serif; font-weight:600; font-size:11px; color:var(--gc-gray-20); border-bottom:1px solid var(--gc-gray-90); }
 .wl-matrix thead tr.mx-sub:last-child th { border-bottom:2px solid var(--gc-gray-80); }
-.wl-matrix th:first-child, .wl-matrix td:first-child { position:sticky; left:0; z-index:1; text-align:left; min-width:190px; box-shadow:1px 0 0 var(--gc-gray-90); }
-.wl-matrix thead th:first-child { background:var(--gc-offwhite); color:var(--gc-gray-40); font-weight:600; }
-.wl-matrix tbody td { padding:6px 8px; text-align:center; }
-.wl-matrix tbody td:first-child { background:#fff; font-family:'Space Grotesk',sans-serif; font-weight:500; }
+.wl-matrix .mx-pos { font-size:10px; font-weight:600; color:#4B2E83; white-space:nowrap; }
+.wl-matrix th:first-child, .wl-matrix td:first-child { position:sticky; left:0; z-index:1; text-align:left; width:180px; min-width:180px; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; box-shadow:1px 0 0 var(--gc-gray-90); }
+.wl-matrix thead th:first-child { background:var(--gc-offwhite); color:var(--gc-gray-40); font-weight:600; text-transform:none; letter-spacing:0; font-size:10px; }
+.wl-matrix tbody td { padding:1px 3px; line-height:16px; text-align:center; }
+.wl-matrix tbody tr.total-row td { padding:3px 3px; }
+.wl-matrix tbody td:first-child { background:#fff; font-family:'Space Grotesk',sans-serif; font-weight:500; padding-left:8px; }
 .wl-matrix tbody tr:hover td:first-child { background:var(--gc-offwhite); }
 .wl-matrix .mx-total { font-weight:700; border-left:2px solid var(--gc-gray-90); background:var(--gc-offwhite); }
 .wl-matrix tbody tr.total-row td:first-child { background:var(--gc-offwhite); }
-.mx-load { display:inline-block; min-width:40px; padding:2px 6px; border-radius:4px; font-weight:700; }
+.wl-matrix .mx-avg { font-size:9px; font-weight:500; color:var(--gc-gray-60); line-height:10px; }
+.wl-matrix td.gc-empty { position:static; width:auto; max-width:none; white-space:normal; text-align:center; }
+.mx-dot { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:5px; }
+.mx-dot.deal { background:var(--gc-blue); }
+.mx-dot.project { background:var(--gc-lime-dark); }
+.mx-load { display:inline-block; min-width:30px; padding:0 4px; border-radius:3px; font-weight:700; line-height:16px; }
 .mx-load.ok { background:#E3F5D0; color:#2E6B0E; }
 .mx-load.high { background:#FFE3C2; color:#9A4A00; }
 .mx-load.over { background:#FDD6D3; color:#B3261E; }
@@ -599,7 +611,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
           </div>
         </div>
 
-        <div class="gc-card">
+        <div class="gc-card mx-card">
           <div class="gc-card-header">
             <div>
               <span class="gc-card-title">Workload matrix</span>
@@ -624,7 +636,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
                 <label>Period</label>
                 <select class="gc-select" id="matrixRange" onchange="renderWorkloadMatrix()"></select>
               </div>
-              <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--gc-gray-40); padding-bottom:9px; cursor:pointer;"><input type="checkbox" id="matrixOnlyUsed" onchange="renderWorkloadMatrix()"> Only items with hours</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--gc-gray-40); padding-bottom:5px; cursor:pointer;"><input type="checkbox" id="matrixOnlyUsed" onchange="renderWorkloadMatrix()"> Only items with hours</label>
               <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="exportWorkloadMatrix()">↓ Excel</button>
             </div>
           </div>
@@ -2240,8 +2252,19 @@ function togglePositionGroup(key, btn) {
 // forecast: on top each column's total (coloured against the weekly target)
 // and number of items, then hours per item, with item totals on the right.
 const POSITION_SHORT = { 'Senior Associate': 'Snr Assoc', 'Senior Analyst': 'Snr Analyst' };
-function positionShortBadge(pos) {
-  return pos ? `<span class="gc-badge gc-badge-violet" title="${escapeHtml(pos)}">${escapeHtml(POSITION_SHORT[pos] || pos)}</span>` : '<span class="gc-badge gc-badge-gray">—</span>';
+function positionShort(pos) { return pos ? (POSITION_SHORT[pos] || pos) : ''; }
+// Compact column labels: first name, plus the surname initial when two people
+// share it (e.g. "Lorenzo P." / "Lorenzo E."). The full name is in the tooltip.
+function matrixShortNames(users) {
+  const parts = u => (u.name || '').trim().split(/\s+/);
+  const count = {};
+  users.forEach(u => { const f = parts(u)[0]; count[f] = (count[f] || 0) + 1; });
+  const out = {};
+  users.forEach(u => {
+    const p = parts(u);
+    out[u.id] = count[p[0]] > 1 && p.length > 1 ? `${p[0]} ${p[p.length - 1].charAt(0)}.` : (p[0] || u.name);
+  });
+  return out;
 }
 // Single weeks start from the week being forecast in the current cycle.
 function populateMatrixPeriod(sel) {
@@ -2274,9 +2297,10 @@ function workloadMatrixData() {
   const users = state.users.filter(u => (u.status || 'approved') === 'approved' && tracksWorkload(u))
     .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
   const posOf = u => POSITIONS.includes(u.position) ? u.position : '';
+  const short = matrixShortNames(users);
   const cols = mode === 'group'
-    ? [...new Set(users.map(posOf))].map(pos => ({ label: pos || 'No position', position: pos, members: users.filter(u => posOf(u) === pos).map(u => u.id) }))
-    : users.map(u => ({ label: u.name, position: u.position, members: [u.id] }));
+    ? [...new Set(users.map(posOf))].map(pos => ({ label: pos || 'No position', short: positionShort(pos) || 'No position', position: pos, members: users.filter(u => posOf(u) === pos).map(u => u.id) }))
+    : users.map(u => ({ label: u.name, short: short[u.id], position: u.position, members: [u.id] }));
   const colOf = {};
   cols.forEach((c, i) => c.members.forEach(id => { colOf[id] = i; }));
   const DELETED = '__deleted';
@@ -2320,20 +2344,21 @@ function renderWorkloadMatrix() {
   const tip = infoTip(`Coloured against the weekly target (${target}h${n > 1 ? ' × ' + n + ' weeks' : ''}): green up to the target, amber up to +40%, red above.`);
   const teamAvg = d.people ? d.grand / d.people : 0;
 
-  const groupHead = c => c.position ? positionShortBadge(c.position) : '<span class="gc-badge gc-badge-gray">No position</span>';
-  let head = `<tr><th>${group ? 'Position' : 'Name'}</th>${d.cols.map(c => `<th class="mx-col">${group ? groupHead(c) : escapeHtml(c.label)}</th>`).join('')}<th class="mx-col mx-total">Total</th></tr>`;
+  // Top-left cell doubles as the legend for the Deal / Project markers.
+  const legend = '<span class="mx-dot deal"></span>Deal &nbsp;<span class="mx-dot project"></span>Project';
+  let head = `<tr><th>${legend}</th>${d.cols.map(c => `<th class="mx-col" title="${escapeHtml(c.label)}">${escapeHtml(c.short)}</th>`).join('')}<th class="mx-col mx-total">Total</th></tr>`;
   if (group) {
     head += `<tr class="mx-sub"><th>People</th>${d.cols.map(c => `<th>${c.members.length}</th>`).join('')}<th class="mx-total">${d.people}</th></tr>`;
     head += `<tr class="mx-sub"><th>${mLabel} hours</th>${d.cols.map((c, i) => `<th>${fmtNum(d.colTotals[i])}</th>`).join('')}<th class="mx-total">${fmtNum(d.grand)}</th></tr>`;
     head += `<tr class="mx-sub"><th>Avg per person ${tip}</th>${d.cols.map((c, i) => { const a = d.colTotals[i] / c.members.length; return `<th>${pill(a, a)}</th>`; }).join('')}<th class="mx-total">${pill(teamAvg, teamAvg)}</th></tr>`;
   } else {
-    head += `<tr class="mx-sub"><th>Position</th>${d.cols.map(c => `<th>${positionShortBadge(c.position)}</th>`).join('')}<th class="mx-total"></th></tr>`;
-    head += `<tr class="mx-sub"><th>${mLabel} hours ${tip}</th>${d.cols.map((c, i) => `<th>${pill(d.colTotals[i], d.colTotals[i])}</th>`).join('')}<th class="mx-total" title="Team total · average per person">${fmtNum(d.grand)}<div style="font-size:10px;font-weight:500;color:var(--gc-gray-60);">avg ${fmtNum(teamAvg)}</div></th></tr>`;
+    head += `<tr class="mx-sub"><th>Position</th>${d.cols.map(c => `<th><span class="mx-pos" title="${escapeHtml(c.position || 'No position')}">${escapeHtml(positionShort(c.position) || '—')}</span></th>`).join('')}<th class="mx-total"></th></tr>`;
+    head += `<tr class="mx-sub"><th>${mLabel} hours ${tip}</th>${d.cols.map((c, i) => `<th>${pill(d.colTotals[i], d.colTotals[i])}</th>`).join('')}<th class="mx-total" title="Team total · average per person">${fmtNum(d.grand)}<div class="mx-avg">avg ${fmtNum(teamAvg)}</div></th></tr>`;
   }
   head += `<tr class="mx-sub"><th># of items</th>${d.colItems.map(x => `<th>${x}</th>`).join('')}<th class="mx-total">${d.usedItems}</th></tr>`;
 
   const body = d.rows.map(r => `<tr>
-      <td>${projectTypeBadge(r.type)} ${escapeHtml(r.name)}${r.code ? ` <span class="proj-code">${escapeHtml(r.code)}</span>` : ''}</td>
+      <td title="${escapeHtml(`${r.type}: ${r.name}${r.code ? ` (${r.code})` : ''}`)}"><span class="mx-dot ${r.type === 'Deal' ? 'deal' : 'project'}"></span>${escapeHtml(r.name)}</td>
       ${r.cells.map(h => `<td>${h > 0 ? fmtNum(h) : ''}</td>`).join('')}
       <td class="mx-total">${r.total > 0 ? fmtNum(r.total) : ''}</td>
     </tr>`).join('');
