@@ -1343,6 +1343,22 @@ function entriesForForm(user_id, week_start, type) {
   return activeProjects().map(p => ({ project_id: p.id, name: p.name, code: p.code, type: p.type || 'Project', hours: map[p.id] || 0 }));
 }
 
+// Hard deadline of the cycle a record is filed in: Tuesday 10:00 of the forecast
+// week (the actual of week W goes in together with the forecast of W+1).
+function cycleHardDeadline(rec) {
+  const tue = addDays(parseYmd(rec.week_start), rec.type === 'actual' ? 8 : 1);
+  return new Date(tue.getFullYear(), tue.getMonth(), tue.getDate(), 10, 0, 0);
+}
+// An empty actual saved before its week could even be filed (Friday 15:00 of
+// that week) — left behind by History saving both columns. It isn't a real
+// submission: it counts as "not filed yet", is never locked and gets the
+// forecast pre-fill. A deliberate 0h actual (saved later) is not a placeholder.
+function isPlaceholder(rec) {
+  if (!rec || rec.type !== 'actual' || (rec.entries && rec.entries.length)) return false;
+  const fri = addDays(parseYmd(rec.week_start), 4);
+  const opens = new Date(fri.getFullYear(), fri.getMonth(), fri.getDate(), 15, 0, 0).getTime();
+  return new Date(rec.submitted_at || rec.updated_at || 0).getTime() < opens;
+}
 function isRecordLockedForUser(rec, user) {
   if (rec && isWeekClosed(rec.week_start)) return true; // a closed week is locked for everyone
   if (rec && rec.type === 'forecast' && isWeekClosed(prevWeekYmd(rec.week_start))) return true; // closing a week freezes the next week's forecast
@@ -1350,9 +1366,11 @@ function isRecordLockedForUser(rec, user) {
   if (isPL(user)) return false;
   const win = Number(state.settings.edit_window_days) || 0;
   if (win <= 0) return false;
-  const submitted = new Date(rec.submitted_at || rec.updated_at || Date.now());
-  const ageDays = (Date.now() - submitted.getTime()) / 86400000;
-  return ageDays > win;
+  if (isPlaceholder(rec)) return false; // not a real submission yet
+  // Editable for `win` days after submitting, and never before the cycle's hard
+  // deadline — so filing early (e.g. from History) can't lock you out of your week.
+  const submitted = new Date(rec.submitted_at || rec.updated_at || Date.now()).getTime();
+  return Date.now() > Math.max(submitted + win * 86400000, cycleHardDeadline(rec).getTime());
 }
 
 function renderSubmit() {
@@ -1377,7 +1395,8 @@ function renderSubmit() {
       </span>
     </div>`;
 
-  const actualRec = findRecord(u.id, actualWeek, 'actual');
+  const actualFound = findRecord(u.id, actualWeek, 'actual');
+  const actualRec = isPlaceholder(actualFound) ? null : actualFound; // a placeholder counts as not filed yet
   const forecastRec = findRecord(u.id, forecastWeek, 'forecast');
   const actualClosed = isWeekClosed(actualWeek);
   const forecastClosed = isForecastLocked(forecastWeek);
@@ -1550,12 +1569,19 @@ function submitWorkload() {
   flashNotice('Workload submitted.');
 }
 
+// `entries` lists every item shown in the form (0 = cleared). Hours on items the
+// form doesn't show (archived or deleted since) are kept, so a save never drops
+// them silently.
 function upsertRecord(user_id, week_start, type, entries, ts) {
   const existing = findRecord(user_id, week_start, type);
+  const shown = new Set(entries.map(e => e.project_id));
   const clean = entries.filter(e => e.hours > 0);
   if (existing) {
-    existing.entries = clean;
+    const wasEmpty = !existing.entries.length;
+    existing.entries = [...clean, ...existing.entries.filter(e => !shown.has(e.project_id))];
     existing.updated_at = ts;
+    // First real content: the edit window starts now, not when an empty record was created.
+    if (wasEmpty && existing.entries.length) existing.submitted_at = ts;
     return existing;
   }
   const rec = { id: uid(), user_id, week_start, type, entries: clean, submitted_at: ts, updated_at: ts };
@@ -1755,7 +1781,8 @@ function toggleHistoryDetail(week, user_id, btn) {
 // EDIT RECORD MODAL
 // =========================================================
 function openEditRecord(user_id, week_start) {
-  editingRecord = { user_id, week_actual: week_start, week_forecast: week_start };
+  // `touched` records which column the user edited: only those get saved.
+  editingRecord = { user_id, week_actual: week_start, week_forecast: week_start, touched: { ea: false, ef: false } };
   const u = state.users.find(x => x.id === user_id);
   const me = currentUser();
   document.getElementById('erm_title').textContent = `Edit — ${u.name} — ${fmtWeekRange(week_start)}`;
@@ -1764,8 +1791,9 @@ function openEditRecord(user_id, week_start) {
 
   const aRec = findRecord(user_id, week_start, 'actual');
   const fRec = findRecord(user_id, week_start, 'forecast');
-  const aLocked = isRecordLockedForUser(aRec, me);
-  const fLocked = isRecordLockedForUser(fRec, me);
+  // Same lock rules as saveEditRecord, so a field that can't be saved isn't editable.
+  const aLocked = isRecordLockedForUser(aRec || { week_start, type: 'actual' }, me) || isWeekClosed(week_start);
+  const fLocked = isRecordLockedForUser(fRec || { week_start, type: 'forecast' }, me) || isForecastLocked(week_start);
 
   const aEntries = entriesForForm(user_id, week_start, 'actual');
   const fEntries = entriesForForm(user_id, week_start, 'forecast');
@@ -1791,7 +1819,7 @@ function editRowHtml(e, prefix, locked) {
       <span class="proj">${projectTypeBadge(e.type)}<span>${escapeHtml(e.name)}</span>${codeHtml}</span>
       <span class="hr-step">
         <button type="button" class="hr-btn" onclick="stepHours(this,-1)" ${locked?'disabled':''} tabindex="-1" aria-label="Decrease">−</button>
-        <input type="number" min="0" max="168" step="1" class="gc-input small" data-prefix="${prefix}" data-project="${e.project_id}" value="${e.hours || ''}" placeholder="0" oninput="recomputeEditTotals()" ${locked?'disabled':''}>
+        <input type="number" min="0" max="168" step="1" class="gc-input small" data-prefix="${prefix}" data-project="${e.project_id}" value="${e.hours || ''}" placeholder="0" oninput="markEditTouched(this); recomputeEditTotals()" ${locked?'disabled':''}>
         <button type="button" class="hr-btn" onclick="stepHours(this,1)" ${locked?'disabled':''} tabindex="-1" aria-label="Increase">+</button>
       </span>
     </div>
@@ -1810,16 +1838,29 @@ function saveEditRecord() {
   const fEntries = [...document.querySelectorAll('#erm_forecastRows input[data-prefix="ef"]')].map(i => ({ project_id: i.dataset.project, hours: Math.round(parseFloat(i.value) || 0) }));
   const now = new Date().toISOString();
   const me = currentUser();
-  const aLocked = isRecordLockedForUser(findRecord(user_id, week_actual, 'actual') || { week_start: week_actual, type: 'actual' }, me) || isWeekClosed(week_actual);
-  const fLocked = isRecordLockedForUser(findRecord(user_id, week_actual, 'forecast') || { week_start: week_actual, type: 'forecast' }, me) || isForecastLocked(week_actual);
+  const aRec = findRecord(user_id, week_actual, 'actual');
+  const fRec = findRecord(user_id, week_actual, 'forecast');
+  const aLocked = isRecordLockedForUser(aRec || { week_start: week_actual, type: 'actual' }, me) || isWeekClosed(week_actual);
+  const fLocked = isRecordLockedForUser(fRec || { week_start: week_actual, type: 'forecast' }, me) || isForecastLocked(week_actual);
   if (aLocked && fLocked) { alert('This week is locked. An Admin must reopen it before it can be edited.'); return; }
-  if (!aLocked) saveRecord(upsertRecord(user_id, week_actual, 'actual', aEntries, now));
-  if (!fLocked) saveRecord(upsertRecord(user_id, week_actual, 'forecast', fEntries, now));
+  // Save only the column(s) the user edited: fixing just the forecast must not
+  // file an empty actual for a week that isn't over yet (it counted as submitted
+  // and, once past the edit window, locked the real actual). Typing 0 still
+  // files a 0h week on purpose.
+  const touched = editingRecord.touched || {};
+  const saveA = !aLocked && !!touched.ea;
+  const saveF = !fLocked && !!touched.ef;
+  if (saveA) saveRecord(upsertRecord(user_id, week_actual, 'actual', aEntries, now));
+  if (saveF) saveRecord(upsertRecord(user_id, week_actual, 'forecast', fEntries, now));
   const cmt = document.getElementById('erm_comment');
-  if (cmt && !(aLocked && fLocked)) saveWeekComment(user_id, week_actual, cmt.value);
+  const noteChanged = !!cmt && commentFor(user_id, week_actual) !== cmt.value.trim();
+  if (cmt) saveWeekComment(user_id, week_actual, cmt.value);
   closeModal('editRecordModal');
   renderActiveSection();
-  flashNotice('Submission updated.');
+  flashNotice(saveA || saveF || noteChanged ? 'Submission updated.' : 'Nothing changed.');
+}
+function markEditTouched(input) {
+  if (editingRecord && editingRecord.touched) editingRecord.touched[input.dataset.prefix] = true;
 }
 
 // =========================================================
@@ -2561,7 +2602,8 @@ function populateCyclePicker(sel) {
 function checklistRowsFor(actualWeek, forecastWeek) {
   const users = [...state.users].filter(x => (x.status || 'approved') === 'approved' && tracksWorkload(x));
   const rows = users.map(u => {
-    const a = findRecord(u.id, actualWeek, 'actual');
+    const aFound = findRecord(u.id, actualWeek, 'actual');
+    const a = isPlaceholder(aFound) ? undefined : aFound; // a placeholder isn't a submission
     const f = findRecord(u.id, forecastWeek, 'forecast');
     return { u, a, f, done: !!(a && f) };
   });
