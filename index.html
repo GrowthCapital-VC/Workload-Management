@@ -663,7 +663,7 @@ table.gc-table { width:100%; border-collapse:collapse; font-size:13px; }
           <div class="gc-card-header">
             <div>
               <span class="gc-card-title">Weekly trend by person</span>
-              <div class="gc-card-sub">Actual vs forecast hours, week by week, for one person</div>
+              <div class="gc-card-sub">Actual vs forecast hours, week by week, for one person — or the team average (per person who submitted)</div>
             </div>
             <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
               <div class="gc-form-group" style="margin-bottom:0; min-width:200px;">
@@ -2506,30 +2506,45 @@ function exportWorkloadMatrix() {
   downloadXlsx(`workload_matrix_${group ? 'by_position' : 'by_person'}_${d.metric}_${d.weeks[0]}.xlsx`, 'Matrix', data);
 }
 
-// ── Weekly trend for a single person ─────────────────────────
+// ── Weekly trend for a single person, or the team average ────
+const TEAM_AVG = '__team';
 let chartPersonTrendInstance = null;
 function renderPersonTrend() {
   const sel = document.getElementById('personTrendUser');
   if (!sel) return;
   const users = [...state.users].filter(x => (x.status || 'approved') === 'approved' && tracksWorkload(x)).sort((a,b)=>a.name.localeCompare(b.name));
-  if (sel.options.length !== users.length) {
+  if (sel.options.length !== users.length + 1) {
     const cur = sel.value;
-    const me = currentUser();
-    sel.innerHTML = users.map(x => `<option value="${x.id}">${escapeHtml(x.name)}</option>`).join('');
-    sel.value = (cur && users.some(u => u.id === cur)) ? cur
-              : (me && users.some(u => u.id === me.id)) ? me.id
-              : (users[0] ? users[0].id : '');
+    sel.innerHTML = `<option value="${TEAM_AVG}">Team average</option>` + users.map(x => `<option value="${x.id}">${escapeHtml(x.name)}</option>`).join('');
+    // "Team average" comes first and is the default; a picked person is kept.
+    sel.value = (cur && (cur === TEAM_AVG || users.some(u => u.id === cur))) ? cur : TEAM_AVG;
   }
   const uid = sel.value;
+  const teamAvg = uid === TEAM_AVG;
   const n = parseInt((document.getElementById('personTrendRange') || {}).value, 10) || 13;
   const weeks = lastNMondays(n);
-  const recs = state.records.filter(r => r.user_id === uid);
   const target = Number(state.settings.hours_per_week_target) || 0;
-  const weekTotals = weeks.map(w => {
-    const aRecs = recs.filter(r => r.type === 'actual' && r.week_start === w);
-    const fRecs = recs.filter(r => r.type === 'forecast' && r.week_start === w);
-    return { week: w, actual: aRecs.length ? sumEntries(aRecs) : null, forecast: fRecs.length ? sumEntries(fRecs) : null };
-  });
+  let weekTotals;
+  if (teamAvg) {
+    // Per week: mean hours of the people in the list who filed that week (actual
+    // and forecast separately). People who didn't file are left out, not counted as 0.
+    const ids = new Set(users.map(u => u.id));
+    const mean = (type, w) => {
+      const per = state.records.filter(r => r.type === type && r.week_start === w && ids.has(r.user_id) && !isPlaceholder(r)).map(r => sumEntries([r]));
+      return per.length ? { v: Math.round(per.reduce((s, x) => s + x, 0) / per.length * 10) / 10, n: per.length } : { v: null, n: 0 };
+    };
+    weekTotals = weeks.map(w => {
+      const a = mean('actual', w), f = mean('forecast', w);
+      return { week: w, actual: a.v, forecast: f.v, nA: a.n, nF: f.n };
+    });
+  } else {
+    const recs = state.records.filter(r => r.user_id === uid);
+    weekTotals = weeks.map(w => {
+      const aRecs = recs.filter(r => r.type === 'actual' && r.week_start === w);
+      const fRecs = recs.filter(r => r.type === 'forecast' && r.week_start === w);
+      return { week: w, actual: aRecs.length ? sumEntries(aRecs) : null, forecast: fRecs.length ? sumEntries(fRecs) : null };
+    });
+  }
   if (chartPersonTrendInstance) { chartPersonTrendInstance.destroy(); chartPersonTrendInstance = null; }
   const ctx = document.getElementById('chartPersonTrend');
   if (!ctx) return;
@@ -2564,11 +2579,18 @@ function renderPersonTrend() {
     }
   };
 
+  // Team average: the tooltip also says how many people each point averages.
+  const avgTooltip = { callbacks: { label: c => {
+    const base = `${c.dataset.label}: ${fmtHours(c.parsed.y)}`;
+    if (/^Weekly target/.test(c.dataset.label)) return base;
+    const k = weekTotals[c.dataIndex][c.dataset.label === 'Actual' ? 'nA' : 'nF'];
+    return `${base} · average of ${k} ${k === 1 ? 'person' : 'people'}`;
+  } } };
   chartPersonTrendInstance = new Chart(ctx, {
     type: 'line',
     data: { labels: weekTotals.map(w => fmtWeekShort(w.week)), datasets },
     plugins: [pointLabels],
-    options: { responsive:true, maintainAspectRatio:false, layout:{ padding:{ top:18 } }, plugins:{ legend:{ position:'bottom', labels:{ font:{ family:'Montserrat', size:11 } } } }, scales:{ y:{ beginAtZero:true, title:{ display:true, text:'Hours' } } } }
+    options: { responsive:true, maintainAspectRatio:false, layout:{ padding:{ top:18 } }, plugins:{ legend:{ position:'bottom', labels:{ font:{ family:'Montserrat', size:11 } } }, ...(teamAvg ? { tooltip: avgTooltip } : {}) }, scales:{ y:{ beginAtZero:true, title:{ display:true, text: teamAvg ? 'Hours per person' : 'Hours' } } } }
   });
 }
 
